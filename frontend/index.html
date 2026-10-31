@@ -1,0 +1,164 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Personal AI Agent</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            background: #f3f5fb;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .app {
+            width: 100%;
+            max-width: 760px;
+            height: 85vh;
+            background: white;
+            border-radius: 18px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 35px #00000015;
+        }
+
+        header {
+            padding: 22px;
+            border-bottom: 1px solid #eee;
+        }
+
+        header h2 { margin: 0 0 8px; }
+        header p { margin: 0; color: gray; }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 13px;
+            border-radius: 12px;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .bot { background: #eef1f8; align-self: flex-start; }
+        .user { background: #315be8; color: white; align-self: flex-end; }
+
+        form {
+            display: flex;
+            gap: 10px;
+            padding: 18px;
+            border-top: 1px solid #eee;
+        }
+
+        input {
+            flex: 1;
+            min-width: 0;
+            padding: 14px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            font-size: 15px;
+        }
+
+        button {
+            padding: 0 22px;
+            border: none;
+            border-radius: 10px;
+            background: #315be8;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:disabled { opacity: 0.6; }
+    </style>
+</head>
+<body>
+
+    <main class="app">
+        <header>
+            <h2>My Personal AI Agent</h2>
+            <p>Powered by Llama 3.2</p>
+        </header>
+
+        <section id="messages">
+            <div class="message bot">
+                Hello! I am your personal AI Agent. How can I help you?
+            </div>
+        </section>
+
+        <form id="chatForm">
+            <input id="messageInput" placeholder="Ask something..." required>
+            <button id="sendButton" type="submit">Send</button>
+        </form>
+    </main>
+
+    <script>
+        const form = document.getElementById("chatForm");
+        const input = document.getElementById("messageInput");
+        const messages = document.getElementById("messages");
+        const button = document.getElementById("sendButton");
+
+        function addMessage(text, type) {
+            const div = document.createElement("div");
+            div.className = "message " + type;
+            div.textContent = text;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+            return div;
+        }
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const message = input.value.trim();
+            if (!message) return;
+
+            addMessage(message, "user");
+            input.value = "";
+            button.disabled = true;
+
+            const reply = addMessage("Thinking...", "bot");
+
+            try {
+                const response = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ message })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Request failed");
+                }
+
+                reply.textContent = data.reply || "No response received.";
+
+            } catch (error) {
+                reply.textContent = "Connection failed. Check whether backend and Ollama are running.";
+            }
+
+            button.disabled = false;
+            input.focus();
+        });
+    </script>
+
+</body>
+</html>
