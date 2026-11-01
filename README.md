@@ -1,19 +1,22 @@
 # My Personal AI Agent
 
-A simple local AI assistant built with Node.js, Express, HTML, CSS, JavaScript, and Ollama.
+A local AI assistant built with Node.js, Express, HTML, CSS, JavaScript, and Ollama.
 
 ## Features
 
 - Chat with the local Llama 3.2 model.
-- Keep recent conversation context during the current server session.
-- Simple browser-based chat interface.
-- Run locally; prompts are sent to your local Ollama service.
+- Keep the latest 20 messages in each conversation.
+- Save conversations permanently in a local JSON file.
+- Restore previous chat messages after a browser refresh.
+- Restore conversation memory after restarting the backend.
+- Keep chat data out of Git using .gitignore.
 
 ## Project Structure
 
 ```text
 myai-agent/
 ├── backend/
+│   ├── data/                 # Created automatically; local chat memory
 │   ├── package.json
 │   ├── package-lock.json
 │   └── server.js
@@ -25,21 +28,21 @@ myai-agent/
 
 ## Requirements
 
-- Node.js 18 or later (Node.js 24 is supported).
+- Node.js 18 or later.
 - Ollama installed and running.
-- The `llama3.2` model downloaded.
+- The llama3.2 model downloaded.
 
 ## Setup
 
 1. Clone this repository.
 2. Open a terminal in the project folder.
-3. Download the model if it is not already installed:
+3. Download the model if needed:
 
    ```bash
    ollama pull llama3.2
    ```
 
-4. Open the backend folder and install dependencies:
+4. Install backend dependencies:
 
    ```bash
    cd backend
@@ -52,25 +55,23 @@ myai-agent/
    npm start
    ```
 
-6. Open [http://localhost:5000](http://localhost:5000) in your browser.
+6. Open http://localhost:5000 in your browser.
 
-## Conversation Memory
+## Permanent Memory
 
-The backend keeps the latest 20 chat messages for each conversation in memory. The browser stores a conversation ID in session storage so the same tab can continue its conversation after a page refresh.
+Chat messages are stored locally in `backend/data/conversations.json`. The backend creates this folder and file automatically when a conversation is saved.
 
-**Note:** Conversation history is temporary. Restarting the backend clears stored conversations. Persistent history requires a database.
+The latest 20 messages are kept for each conversation. The browser stores the conversation ID in session storage, allowing the same browser tab to restore its chat after a refresh or backend restart.
+
+The `backend/data/` folder is ignored by Git, so personal chat history is not pushed to GitHub. Keep a backup of this file if you want to preserve your conversations when moving to another computer.
 
 ## API
 
-### Health check
+- `GET /api/health` - Check whether the server is running.
+- `GET /api/history/:conversationId` - Load saved messages for a conversation.
+- `POST /api/chat` - Send a message and receive an AI response.
 
-`GET /api/health`
-
-### Chat
-
-`POST /api/chat`
-
-JSON body:
+Chat request JSON:
 
 ```json
 {
@@ -78,8 +79,6 @@ JSON body:
   "conversationId": "a-unique-conversation-id"
 }
 ```
-
-The API returns a JSON object containing `reply`.
 
 ## Technologies
 
@@ -89,3 +88,4 @@ The API returns a JSON object containing `reply`.
 - Ollama
 - Llama 3.2
 - HTML, CSS, JavaScript
+- Local JSON file storage
