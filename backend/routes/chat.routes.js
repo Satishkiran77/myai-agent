@@ -5,6 +5,7 @@ const conversationStore = require("../memory/conversation.store");
 const profileStore = require("../memory/profile.store");
 const ollamaService = require("../services/ollama.service");
 const webSearchService = require("../services/web-search.service");
+const articleFetchService = require("../services/article-fetch.service");
 const { understandIntent } = require("../agent/intent.engine");
 
 router.post("/chat", async (req, res, next) => {
@@ -32,21 +33,22 @@ router.post("/chat", async (req, res, next) => {
         if (intent.intent === "web_search") {
             searchQuery = webSearchService.buildSearchQuery(userMessage);
             sources = await webSearchService.search(userMessage);
+            sources = await articleFetchService.enrichArticles(sources);
             if (!sources.length) {
                 reply = "I couldn't find useful search results for that request. Try a more specific search phrase.";
             } else {
                 const searchContext = [
                     "You are BENZ, an assistant that has just performed a live web search.",
-                    "Answer the user's actual question using only the search result titles and snippets below.",
-                    "Never claim you read or opened the linked pages; only snippets are available.",
+                    "Answer the user's actual question using only the search result titles, snippets, and extracted article content below.",
+                    "Some pages may block access or expose only a short description. Never claim full article access unless extracted article content is provided.",
                     "Do not invent news events, dates, facts, article details, or sources.",
                     "Do not recommend these websites as generic places to get news.",
                     "If a result is a topic page, homepage, or news aggregator rather than a specific article, say that clearly.",
-                    "Summarize the specific information present in the snippets. If the snippets do not contain concrete news, be transparent and say the search did not return enough article-level detail.",
+                    "Prioritize extracted article content when available. If only a snippet is available, clearly say that the page could not provide full article text. Never invent missing details.",
                     "Keep the answer concise. Do not create extra headlines that are not present in the result titles.",
                     "LIVE SEARCH QUERY: " + searchQuery,
                     "LIVE SEARCH RESULTS:",
-                    ...sources.map((item, index) => (index + 1) + ". TITLE: " + item.title + "\nSNIPPET: " + item.snippet + "\nSOURCE URL: " + item.url)
+                    ...sources.map((item, index) => (index + 1) + ". TITLE: " + item.title + "\nPUBLISHED: " + (item.publishedAt || "Not provided") + "\nDESCRIPTION: " + item.snippet + "\nARTICLE CONTENT: " + (item.articleContent || "Not available; use description only.") + "\nSOURCE URL: " + item.url)
                 ].join("\n\n");
                 reply = await ollamaService.chat([
                     { role: "system", content: searchContext },
