@@ -3,5 +3,6 @@ node_modules/
 .env
 .env.*
 !.env.example
+backend/data/
 .DS_Store
 Thumbs.db
