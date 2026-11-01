@@ -46,7 +46,7 @@ function rememberUserFact(message) {
     if (!match) return null;
     const key = match[1].trim().toLowerCase();
     const value = match[2].trim().replace(/[.!?]+$/, "");
-    const sensitive = /\b(password|passcode|otp|medical|health|disease|diagnosis|medicine|religion|politics|political party|caste|sexual|bank account|credit card|aadhaar|passport)\\b/i;
+    const sensitive = /\b(password|passcode|otp|medical|health|disease|diagnosis|medicine|religion|politics|political party|caste|sexual|bank account|credit card|aadhaar|passport)\b/i;
     if (sensitive.test(key + " " + value)) return null;
     if (!key || !value || key.length > 80 || value.length > 200 || ["__proto__", "constructor", "prototype"].includes(key)) return null;
     return { key, value };
