@@ -38,7 +38,7 @@ async function set(key, value) {
 }
 async function remove(key) {
     delete profileMemory[key];
-    saveQueue = saveQueue.then(persist);
+    saveQueue = saveQueue.catch(() => {}).then(persist);
     await saveQueue;
 }
 function rememberUserFact(message) {
