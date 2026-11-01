@@ -12,8 +12,8 @@ function decodeHtml(value) {
 function extractMeta(html, names) {
     for (const name of names) {
         const patterns = [
-            new RegExp('<meta[^>]+(?:name|property)=["\\']' + name + '["\\'][^>]+content=["\\']([^"\\']+)["\\']', "i"),
-            new RegExp('<meta[^>]+content=["\\']([^"\\']+)["\\'][^>]+(?:name|property)=["\\']' + name + '["\\']', "i")
+            new RegExp("<meta[^>]+(?:name|property)=['\"]" + name + "['\"][^>]+content=['\"]([^'\"]+)['\"]", "i"),
+            new RegExp("<meta[^>]+content=['\"]([^'\"]+)['\"][^>]+(?:name|property)=['\"]" + name + "['\"]", "i")
         ];
         for (const pattern of patterns) {
             const match = html.match(pattern);
