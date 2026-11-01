@@ -26,19 +26,27 @@ router.post("/chat", async (req, res, next) => {
         const memoryPrompt = profileStore.createMemoryPrompt();
         const modelMessages = memoryPrompt ? [{ role: "system", content: memoryPrompt }, ...messages] : messages;
         let sources = [];
+        let searchQuery = null;
         let reply;
 
         if (intent.intent === "web_search") {
+            searchQuery = webSearchService.buildSearchQuery(userMessage);
             sources = await webSearchService.search(userMessage);
             if (!sources.length) {
-                reply = "I couldn't find reliable search results for that request. Try rephrasing your search.";
+                reply = "I couldn't find useful search results for that request. Try a more specific search phrase.";
             } else {
                 const searchContext = [
-                    "You are BENZ. Answer the user's request using only the web search results below.",
-                    "Do not invent facts, dates, headlines, or sources. If the results do not answer something, say so.",
-                    "Summarize the results clearly and mention that the links are the sources.",
-                    "WEB SEARCH RESULTS:",
-                    ...sources.map((item, index) => (index + 1) + ". " + item.title + "\n" + item.snippet + "\nURL: " + item.url)
+                    "You are BENZ, an assistant that has just performed a live web search.",
+                    "Answer the user's actual question using only the search result titles and snippets below.",
+                    "Never claim you read or opened the linked pages; only snippets are available.",
+                    "Do not invent news events, dates, facts, article details, or sources.",
+                    "Do not recommend these websites as generic places to get news.",
+                    "If a result is a topic page, homepage, or news aggregator rather than a specific article, say that clearly.",
+                    "Summarize the specific information present in the snippets. If the snippets do not contain concrete news, be transparent and say the search did not return enough article-level detail.",
+                    "Keep the answer concise. Do not create extra headlines that are not present in the result titles.",
+                    "LIVE SEARCH QUERY: " + searchQuery,
+                    "LIVE SEARCH RESULTS:",
+                    ...sources.map((item, index) => (index + 1) + ". TITLE: " + item.title + "\nSNIPPET: " + item.snippet + "\nSOURCE URL: " + item.url)
                 ].join("\n\n");
                 reply = await ollamaService.chat([
                     { role: "system", content: searchContext },
@@ -50,7 +58,7 @@ router.post("/chat", async (req, res, next) => {
         }
 
         await conversationStore.set(conversationId, [...messages, { role: "assistant", content: reply }]);
-        res.json({ reply, intent, sources });
+        res.json({ reply, intent, searchQuery, sources });
     } catch (error) {
         next(error);
     }
