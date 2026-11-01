@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -88,18 +87,13 @@
     </style>
 </head>
 <body>
-
     <main class="app">
         <header>
             <h2>My Personal AI Agent</h2>
-            <p>Powered by Llama 3.2</p>
+            <p>Powered by Llama 3.2 | Permanent Memory Enabled</p>
         </header>
 
-        <section id="messages">
-            <div class="message bot">
-                Hello! I am your personal AI Agent. How can I help you?
-            </div>
-        </section>
+        <section id="messages"></section>
 
         <form id="chatForm">
             <input id="messageInput" placeholder="Ask something..." required>
@@ -113,6 +107,7 @@
         const messages = document.getElementById("messages");
         const button = document.getElementById("sendButton");
         const conversationId = sessionStorage.getItem("conversationId") || crypto.randomUUID();
+
         sessionStorage.setItem("conversationId", conversationId);
 
         function addMessage(text, type) {
@@ -122,6 +117,25 @@
             messages.appendChild(div);
             messages.scrollTop = messages.scrollHeight;
             return div;
+        }
+
+        async function loadHistory() {
+            try {
+                const response = await fetch("/api/history/" + encodeURIComponent(conversationId));
+                const data = await response.json();
+
+                messages.innerHTML = "";
+
+                if (data.messages && data.messages.length > 0) {
+                    data.messages.forEach(item => {
+                        addMessage(item.content, item.role === "user" ? "user" : "bot");
+                    });
+                } else {
+                    addMessage("Hello! I am your personal AI Agent. How can I help you?", "bot");
+                }
+            } catch (error) {
+                addMessage("Could not load previous chat history.", "bot");
+            }
         }
 
         form.addEventListener("submit", async (event) => {
@@ -152,15 +166,15 @@
                 }
 
                 reply.textContent = data.reply || "No response received.";
-
             } catch (error) {
-                reply.textContent = "Connection failed. Check whether backend and Ollama are running.";
+                reply.textContent = error.message || "Connection failed. Check backend and Ollama.";
             }
 
             button.disabled = false;
             input.focus();
         });
-    </script>
 
+        loadHistory();
+    </script>
 </body>
 </html>
