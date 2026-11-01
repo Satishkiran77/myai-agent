@@ -10,8 +10,10 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "../frontend")));
 
 const conversations = new Map();
+const profileMemory = {};
 const dataDirectory = path.join(__dirname, "data");
 const memoryFile = path.join(dataDirectory, "conversations.json");
+const profileFile = path.join(dataDirectory, "profile.json");
 
 async function loadConversations() {
     await fs.mkdir(dataDirectory, { recursive: true });
@@ -26,28 +28,78 @@ async function loadConversations() {
             }
         }
 
-        console.log("Permanent memory loaded");
+        console.log("Conversation history loaded");
     } catch (error) {
-        if (error.code !== "ENOENT") {
-            throw error;
-        }
+        if (error.code !== "ENOENT") throw error;
+        console.log("Starting with empty conversation history");
+    }
 
-        console.log("Starting with empty memory");
+    try {
+        const savedProfile = await fs.readFile(profileFile, "utf8");
+        Object.assign(profileMemory, JSON.parse(savedProfile));
+        console.log("Global personal memory loaded");
+    } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+        console.log("Starting with empty personal memory");
     }
 }
 
 async function saveConversations() {
     await fs.mkdir(dataDirectory, { recursive: true });
-
-    const savedData = Object.fromEntries(conversations);
     const temporaryFile = memoryFile + ".tmp";
 
-    await fs.writeFile(temporaryFile, JSON.stringify(savedData, null, 2), "utf8");
+    await fs.writeFile(
+        temporaryFile,
+        JSON.stringify(Object.fromEntries(conversations), null, 2),
+        "utf8"
+    );
     await fs.rename(temporaryFile, memoryFile);
+}
+
+async function saveProfileMemory() {
+    await fs.mkdir(dataDirectory, { recursive: true });
+    const temporaryFile = profileFile + ".tmp";
+
+    await fs.writeFile(
+        temporaryFile,
+        JSON.stringify(profileMemory, null, 2),
+        "utf8"
+    );
+    await fs.rename(temporaryFile, profileFile);
+}
+
+function rememberUserFact(message) {
+    const match = message.match(/^remember(?: this)?\\s*:\\s*(?:my\\s+)?(.+?)\\s+is\\s+(.+)$/i);
+
+    if (!match) return false;
+
+    const key = match[1].trim().toLowerCase();
+    const value = match[2].trim().replace(/[.!?]+$/, "");
+
+    if (!key || !value) return false;
+
+    profileMemory[key] = value;
+    return true;
+}
+
+function createMemoryPrompt() {
+    const facts = Object.entries(profileMemory);
+
+    if (facts.length === 0) return null;
+
+    const memoryText = facts
+        .map(([key, value]) => "- " + key + ": " + value)
+        .join("\\n");
+
+    return "You are the user's personal AI assistant. These are saved facts about the user. Use them when relevant and answer directly. Do not say you have no memory when the answer is listed here.\\n" + memoryText;
 }
 
 app.get("/api/health", (req, res) => {
     res.json({ status: "AI Agent is running" });
+});
+
+app.get("/api/memory", (req, res) => {
+    res.json({ memory: profileMemory });
 });
 
 app.get("/api/history/:conversationId", (req, res) => {
@@ -74,11 +126,22 @@ app.post("/api/chat", async (req, res) => {
             });
         }
 
+        const userMessage = message.trim();
+
+        if (rememberUserFact(userMessage)) {
+            await saveProfileMemory();
+        }
+
         const history = conversations.get(conversationId) || [];
         const messages = [
             ...history,
-            { role: "user", content: message.trim() }
+            { role: "user", content: userMessage }
         ];
+
+        const memoryPrompt = createMemoryPrompt();
+        const ollamaMessages = memoryPrompt
+            ? [{ role: "system", content: memoryPrompt }, ...messages]
+            : messages;
 
         const response = await fetch("http://localhost:11434/api/chat", {
             method: "POST",
@@ -87,7 +150,7 @@ app.post("/api/chat", async (req, res) => {
             },
             body: JSON.stringify({
                 model: "llama3.2",
-                messages,
+                messages: ollamaMessages,
                 stream: false
             })
         });
@@ -127,7 +190,7 @@ async function startServer() {
             console.log("AI Agent running at http://localhost:5000");
         });
     } catch (error) {
-        console.error("Could not load permanent memory:", error.message);
+        console.error("Could not load memory:", error.message);
         process.exit(1);
     }
 }
