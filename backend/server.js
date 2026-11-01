@@ -21,9 +21,9 @@ app.use("/api", historyRoutes);
 app.use((req, res) => res.status(404).json({ error: "Route not found." }));
 app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
-    const status = error.status === 413 ? 413 : 500;
+    const status = [413, 502, 503].includes(error.status) ? error.status : 500;
     console.error("Request error:", error.message);
-    res.status(status).json({ error: status === 413 ? "Request is too large." : "Something went wrong. Please try again." });
+    res.status(status).json({ error: status === 413 ? "Request is too large." : status === 503 ? "Ollama is unavailable or took too long. Check whether Ollama is running." : status === 502 ? "Ollama returned an invalid response." : "Something went wrong. Please try again." });
 });
 
 async function startServer() {
