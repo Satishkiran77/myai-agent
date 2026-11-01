@@ -37,7 +37,7 @@ function isGenericPage(result) {
         const url = new URL(result.url);
         const path = url.pathname.toLowerCase().replace(/\/$/, "");
         const title = result.title.toLowerCase();
-        const genericPath = /\/(category|categories|tag|tags|topic|topics|search|latest|news|artificial-intelligence|ai-news)(\.html)?$/.test(path);
+        const genericPath = /\/(category|categories|tag|tags|topic|topics|search|latest|news|artificial-intelligence|ai-news)(\/|\.html|$)/.test(path);
         const homepage = !path || path === "/index.html" || path === "/news.html";
         const genericTitle = /\b(latest|news|updates|artificial intelligence|ai)\b/.test(title) &&
             !/\b(announces?|launches?|released?|unveils?|raises?|acquires?|develops?|introduces?|reports?|researchers?|study|model|chip|funding|deal|breakthrough)\b/.test(title);
@@ -108,8 +108,7 @@ async function search(query) {
         .filter(result => !isGenericPage(result))
         .sort((a, b) => scoreResult(b) - scoreResult(a));
 
-    return (specificResults.length ? specificResults : found.filter(result => !isGenericPage(result)))
-        .slice(0, 5);
+    return specificResults.slice(0, 5);
 }
 
 module.exports = { search, buildSearchQuery };
