@@ -1,91 +1,87 @@
-# My Personal AI Agent
+# BENZ — Personal AI Assistant
 
-A local AI assistant built with Node.js, Express, HTML, CSS, JavaScript, and Ollama.
+BENZ is a local-first personal AI assistant built with Node.js, Express, HTML, CSS, JavaScript, and Ollama. Its current foundation keeps conversations and personal memory on your computer.
 
-## Features
+## Current features
 
-- Chat with the local Llama 3.2 model.
+- Chat with a local Ollama model (Llama 3.2 by default).
 - Keep the latest 20 messages in each conversation.
-- Save conversations permanently in a local JSON file.
-- Restore previous chat messages after a browser refresh.
-- Restore conversation memory after restarting the backend.
-- Keep chat data out of Git using .gitignore.
+- Save conversations and personal memory in local JSON files.
+- Restore chat history after a browser refresh or backend restart.
+- View, edit, and delete saved personal memories.
+- Configure the model, Ollama address, server port, and request timeout.
+- Limit request size and message length; handle unavailable Ollama service gracefully.
 
-## Project Structure
+## Project structure
 
 ```text
 myai-agent/
 ├── backend/
-│   ├── data/                 # Created automatically; local chat memory
+│   ├── config/settings.js
+│   ├── memory/
+│   │   ├── conversation.store.js
+│   │   ├── profile.store.js
+│   │   └── index.js
+│   ├── routes/
+│   │   ├── chat.routes.js
+│   │   ├── health.routes.js
+│   │   ├── history.routes.js
+│   │   └── memory.routes.js
+│   ├── services/ollama.service.js
+│   ├── data/                 # Local-only; ignored by Git
 │   ├── package.json
-│   ├── package-lock.json
 │   └── server.js
-├── frontend/
-│   └── index.html
+├── frontend/index.html
 ├── .gitignore
 └── README.md
 ```
 
-## Requirements
+## Requirements and setup
 
-- Node.js 18 or later.
+- Node.js 18 or later (Node.js 20+ recommended).
 - Ollama installed and running.
-- The llama3.2 model downloaded.
+- Download the model if needed: `ollama pull llama3.2`.
+- In `backend`, install dependencies with `npm install`, then start with `npm start`.
+- Open http://localhost:5000.
 
-## Setup
+On Windows PowerShell, use `npm.cmd install` and `npm.cmd start` if script execution policy blocks `npm`.
 
-1. Clone this repository.
-2. Open a terminal in the project folder.
-3. Download the model if needed:
+## Configuration
 
-   ```bash
-   ollama pull llama3.2
-   ```
+Optional environment variables:
 
-4. Install backend dependencies:
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HOST` | `127.0.0.1` | Local bind address |
+| `PORT` | `5000` | Backend port |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama address |
+| `OLLAMA_MODEL` | `llama3.2` | Model name |
+| `OLLAMA_TIMEOUT_MS` | `120000` | Maximum model response wait |
+| `JSON_BODY_LIMIT` | `1mb` | Maximum JSON request size |
 
-   ```bash
-   cd backend
-   npm install
-   ```
+The backend binds to localhost by default, so it is not exposed to your local network.
 
-5. Start the server:
+## Local data and privacy
 
-   ```bash
-   npm start
-   ```
+Chat messages are stored in `backend/data/conversations.json`; profile facts are stored in `backend/data/profile.json`. The backend creates these files automatically. The `backend/data/` folder is ignored by Git, so personal chat and profile data are not pushed to GitHub. Back up these files before moving computers.
 
-6. Open http://localhost:5000 in your browser.
-
-## Permanent Memory
-
-Chat messages are stored locally in `backend/data/conversations.json`. The backend creates this folder and file automatically when a conversation is saved.
-
-The latest 20 messages are kept for each conversation. The browser stores the conversation ID in session storage, allowing the same browser tab to restore its chat after a refresh or backend restart.
-
-The `backend/data/` folder is ignored by Git, so personal chat history is not pushed to GitHub. Keep a backup of this file if you want to preserve your conversations when moving to another computer.
+The app recognizes explicit memory instructions such as `Remember this: My favorite color is blue` and a small set of preference phrases. Do not save passwords, OTPs, financial credentials, or other secrets.
 
 ## API
 
-- `GET /api/health` - Check whether the server is running.
-- `GET /api/history/:conversationId` - Load saved messages for a conversation.
-- `POST /api/chat` - Send a message and receive an AI response.
+- `GET /api/health` — backend status.
+- `GET /api/history/:conversationId` — load saved messages.
+- `POST /api/chat` — send a message and receive an AI response.
+- `GET /api/memory` — read saved profile memory.
+- `PUT /api/memory/:key` — update a saved memory.
+- `DELETE /api/memory/:key` — delete a saved memory.
 
-Chat request JSON:
+Chat request:
 
 ```json
-{
-  "message": "What is artificial intelligence?",
-  "conversationId": "a-unique-conversation-id"
-}
+{ "message": "What is artificial intelligence?", "conversationId": "a-unique-conversation-id" }
 ```
 
-## Technologies
+## Roadmap
 
-- Node.js
-- Express
-- CORS
-- Ollama
-- Llama 3.2
-- HTML, CSS, JavaScript
-- Local JSON file storage
+The next phases will add an intelligent task planner, stronger memory retrieval, voice, web research, permission-based computer assistance, coding tools, and a lightweight 3D BENZ command-center interface. Sensitive actions will require user approval.
