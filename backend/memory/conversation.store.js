@@ -28,7 +28,7 @@ async function load() {
 function get(id) { return conversations.get(id) || []; }
 async function set(id, messages) {
     conversations.set(id, messages.slice(-settings.maxConversationMessages));
-    saveQueue = saveQueue.then(() => writeAtomically(dataFile, JSON.stringify(Object.fromEntries(conversations), null, 2)));
+    saveQueue = saveQueue.catch(() => {}).then(() => writeAtomically(dataFile, JSON.stringify(Object.fromEntries(conversations), null, 2)));
     await saveQueue;
 }
 module.exports = { load, get, set };
