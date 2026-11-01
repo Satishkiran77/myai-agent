@@ -39,9 +39,9 @@ function isGenericPage(result) {
         const title = result.title.toLowerCase();
         const genericPath = /\/(category|categories|tag|tags|topic|topics|search|latest|news|research|artificial-intelligence|ai-news)(\/|\.html|$)/.test(path);
         const homepage = !path || path === "/index.html" || path === "/news.html";
-        const genericTitle = /\b(latest|news|updates|artificial intelligence|ai)\b/.test(title) &&
+        const genericTitle = /\b(latest|daily|news|updates|recap|roundup|digest|newsletter|artificial intelligence|ai)\b/.test(title) &&
             !/\b(announces?|launches?|released?|unveils?|raises?|acquires?|develops?|introduces?|reports?|researchers?|study|model|chip|funding|deal|breakthrough)\b/.test(title);
-        const genericSnippet = /latest news|read the latest|stay updated|browse thousands|news and analysis from/i.test(result.snippet);
+        const genericSnippet = /latest (?:ai )?news|daily ai news|news recap|news roundup|news digest|read the latest|stay updated|browse thousands|news and analysis from|summari[sz]ed in minutes/i.test(result.snippet);
         return genericPath || homepage || (genericTitle && genericSnippet);
     } catch {
         return true;
