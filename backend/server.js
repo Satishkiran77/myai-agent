@@ -69,7 +69,7 @@ async function saveProfileMemory() {
 }
 
 function rememberUserFact(message) {
-    const match = message.match(/^remember(?: this)?\\s*:\\s*(?:my\\s+)?(.+?)\\s+is\\s+(.+)$/i);
+    const match = message.match(/^remember(?: this)?\s*:\s*(?:my\s+)?(.+?)\s+is\s+(.+)$/i);
 
     if (!match) return false;
 
@@ -89,9 +89,9 @@ function createMemoryPrompt() {
 
     const memoryText = facts
         .map(([key, value]) => "- " + key + ": " + value)
-        .join("\\n");
+        .join("\n");
 
-    return "You are the user's personal AI assistant. These are saved facts about the user. Use them when relevant and answer directly. Do not say you have no memory when the answer is listed here.\\n" + memoryText;
+    return "You are the user's personal AI assistant. These are saved facts about the user. Use them when relevant and answer directly. Do not say you have no memory when the answer is listed here.\n" + memoryText;
 }
 
 app.get("/api/health", (req, res) => {
