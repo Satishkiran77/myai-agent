@@ -113,6 +113,45 @@
         .bot { background: #eef1f8; align-self: flex-start; }
         .user { background: #315be8; color: white; align-self: flex-end; }
 
+        .sources-panel {
+            width: min(90%, 680px);
+            align-self: flex-start;
+            display: grid;
+            gap: 10px;
+            margin-top: -4px;
+        }
+
+        .sources-heading {
+            margin: 0;
+            color: #596579;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .source-card {
+            padding: 12px 14px;
+            border: 1px solid #e1e6f0;
+            border-radius: 12px;
+            background: #fff;
+            display: grid;
+            gap: 6px;
+        }
+
+        .source-card a {
+            color: #244fc7;
+            font-weight: 700;
+            text-decoration: none;
+            line-height: 1.4;
+        }
+
+        .source-card a:hover { text-decoration: underline; }
+        .source-meta { color: #687386; font-size: 12px; }
+        .source-description { color: #354052; font-size: 13px; line-height: 1.45; }
+
+        @media (max-width: 600px) {
+            .sources-panel { width: 100%; }
+        }
+
         #chatForm {
             display: flex;
             gap: 10px;
@@ -186,6 +225,60 @@
             messages.appendChild(div);
             messages.scrollTop = messages.scrollHeight;
             return div;
+        }
+
+        function addSources(sources) {
+            if (!Array.isArray(sources) || sources.length === 0) return;
+
+            const panel = document.createElement("section");
+            panel.className = "sources-panel";
+
+            const heading = document.createElement("p");
+            heading.className = "sources-heading";
+            heading.textContent = "Sources";
+            panel.appendChild(heading);
+
+            sources.forEach((source) => {
+                if (!source || typeof source.url !== "string") return;
+
+                let parsedUrl;
+                try {
+                    parsedUrl = new URL(source.url);
+                    if (!["http:", "https:"].includes(parsedUrl.protocol)) return;
+                } catch {
+                    return;
+                }
+
+                const card = document.createElement("article");
+                card.className = "source-card";
+
+                const link = document.createElement("a");
+                link.href = parsedUrl.href;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.textContent = source.title || parsedUrl.hostname;
+
+                const meta = document.createElement("div");
+                meta.className = "source-meta";
+                const date = source.publishedAt ? "Published: " + source.publishedAt + " · " : "";
+                meta.textContent = date + parsedUrl.hostname;
+
+                card.append(link, meta);
+
+                if (source.snippet) {
+                    const description = document.createElement("div");
+                    description.className = "source-description";
+                    description.textContent = source.snippet;
+                    card.appendChild(description);
+                }
+
+                panel.appendChild(card);
+            });
+
+            if (panel.querySelector(".source-card")) {
+                messages.appendChild(panel);
+                messages.scrollTop = messages.scrollHeight;
+            }
         }
 
         async function loadHistory() {
@@ -328,6 +421,7 @@
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || "Request failed");
                 reply.textContent = data.reply || "No response received.";
+                if (data.intent && data.intent.intent === "web_search") addSources(data.sources);
 
                 if (memoryPanel.classList.contains("open")) await loadMemories();
             } catch (error) {
