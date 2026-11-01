@@ -82,6 +82,40 @@ function rememberUserFact(message) {
     return true;
 }
 
+function rememberAutomaticPreference(message) {
+    const cleanMessage = message.trim().replace(/[.!?]+$/, "");
+
+    // Avoid automatically storing sensitive personal information.
+    const sensitiveTerms = /\b(password|passcode|otp|medical|health|disease|diagnosis|medicine|religion|politics|political party|caste|sexual|bank account|credit card|aadhaar|passport)\b/i;
+    if (sensitiveTerms.test(cleanMessage)) return false;
+
+    let match = cleanMessage.match(/^my favorite ([a-z0-9 _-]{2,40}) is (.{1,100})$/i);
+    if (match) {
+        profileMemory["favorite " + match[1].trim().toLowerCase()] = match[2].trim();
+        return true;
+    }
+
+    match = cleanMessage.match(/^i (?:like|love|enjoy) (.{2,100})$/i);
+    if (match) {
+        profileMemory["likes"] = match[1].trim();
+        return true;
+    }
+
+    match = cleanMessage.match(/^i prefer (.{2,100})$/i);
+    if (match) {
+        profileMemory["preference"] = match[1].trim();
+        return true;
+    }
+
+    match = cleanMessage.match(/^i am interested in (.{2,100})$/i);
+    if (match) {
+        profileMemory["interests"] = match[1].trim();
+        return true;
+    }
+
+    return false;
+}
+
 function createMemoryPrompt() {
     const facts = Object.entries(profileMemory);
 
@@ -128,7 +162,11 @@ app.post("/api/chat", async (req, res) => {
 
         const userMessage = message.trim();
 
-        if (rememberUserFact(userMessage)) {
+        const explicitlyRemembered = rememberUserFact(userMessage);
+        const automaticallyRemembered = !explicitlyRemembered &&
+            rememberAutomaticPreference(userMessage);
+
+        if (explicitlyRemembered || automaticallyRemembered) {
             await saveProfileMemory();
         }
 
