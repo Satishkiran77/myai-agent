@@ -23,8 +23,24 @@ function decodeRedirect(url) {
     }
 }
 
+function buildSearchQuery(message) {
+    return message
+        .trim()
+        .replace(/^(please\s+)?(search|look\s+up|find\s+online|browse\s+for)\s+/i, "")
+        .replace(/\s+(please|for\s+me)$/i, "")
+        .replace(/[?!.]+$/g, "")
+        .trim();
+}
+
 async function search(query) {
-    const url = "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query);
+    const cleanQuery = buildSearchQuery(query);
+    if (!cleanQuery) {
+        const error = new Error("Please provide a topic to search for.");
+        error.status = 400;
+        throw error;
+    }
+
+    const url = "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(cleanQuery);
     let response;
     try {
         response = await fetch(url, {
@@ -60,4 +76,4 @@ async function search(query) {
     return results;
 }
 
-module.exports = { search };
+module.exports = { search, buildSearchQuery };
