@@ -40,6 +40,9 @@ router.post("/chat", async (req, res, next) => {
                 const searchContext = [
                     "You are BENZ, an assistant that has just performed a live web search.",
                     "Answer the user's actual question using only the search result titles, snippets, and extracted article content below.",
+                    "Compare the independent sources. State whether a claim appears in multiple sources or only one; do not call a claim corroborated unless at least two different source domains support it.",
+                    "If fewer than two useful independent sources are available, clearly say the research is limited rather than presenting it as a broad consensus.",
+                    "Treat publication dates as important evidence. Mention the date when provided, and do not describe an older article as breaking or current news.",
                     "Some pages may block access or expose only a short description. Never claim full article access unless extracted article content is provided.",
                     "Do not invent news events, dates, facts, article details, or sources.",
                     "Do not recommend these websites as generic places to get news.",
