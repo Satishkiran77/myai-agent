@@ -45,15 +45,35 @@ function normalizeUrl(value) {
     }
 }
 
+function domainOf(value) {
+    try { return new URL(value).hostname.toLowerCase().replace(/^www\./, ""); }
+    catch { return ""; }
+}
+
+const officialDomains = [
+    "openai.com", "anthropic.com", "blog.google", "deepmind.google", "googleblog.com",
+    "ai.meta.com", "about.fb.com", "microsoft.com", "blogs.microsoft.com", "nvidia.com",
+    "x.ai", "huggingface.co", "stability.ai", "mistral.ai", "deepseek.com", "qwen.ai",
+    "arxiv.org", "nature.com", "science.org", "acm.org", "ieee.org"
+];
+const reputableNewsDomains = [
+    "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "theverge.com",
+    "techcrunch.com", "technologyreview.com", "wired.com", "ft.com", "nytimes.com"
+];
+
+function matchesDomain(domain, list) {
+    return list.some(item => domain === item || domain.endsWith("." + item));
+}
+
 function isGenericPage(result) {
     try {
         const url = new URL(result.url);
         const path = url.pathname.toLowerCase().replace(/\/$/, "");
         const title = result.title.toLowerCase();
-        const genericPath = /\/(category|categories|tag|tags|topic|topics|search|latest|news|research|artificial-intelligence|ai-news)(\/|\.html|$)/.test(path);
+        const genericPath = /\/(category|categories|tag|tags|topic|topics|search|latest|news|research|artificial-intelligence|ai-news|this-month|model-releases)(\/|\.html|$)/.test(path);
         const homepage = !path || path === "/index.html" || path === "/news.html";
         const genericTitle = /\b(latest|daily|news|updates|recap|roundup|digest|newsletter|artificial intelligence|ai)\b/.test(title) &&
-            !/\b(announces?|launches?|released?|unveils?|raises?|acquires?|develops?|introduces?|reports?|researchers?|study|model|chip|funding|deal|breakthrough)\b/.test(title);
+            !/\b(announces?|launches?|released?|unveils?|raises?|acquires?|develops?|introduces?|reports?|researchers?|study|model|chip|funding|deal|breakthrough|policy|retires?)\b/.test(title);
         const genericSnippet = /latest (?:ai )?news|daily ai news|news recap|news roundup|news digest|read the latest|stay updated|browse thousands|news and analysis from|summari[sz]ed in minutes/i.test(result.snippet);
         return genericPath || homepage || (genericTitle && genericSnippet);
     } catch {
@@ -62,9 +82,12 @@ function isGenericPage(result) {
 }
 
 function scoreResult(result) {
+    const domain = domainOf(result.url);
     let score = 0;
+    if (matchesDomain(domain, officialDomains)) score += 8;
+    else if (matchesDomain(domain, reputableNewsDomains)) score += 5;
     const text = result.title + " " + result.snippet;
-    if (/\b(announces?|launches?|released?|unveils?|raises?|acquires?|develops?|introduces?|reports?|researchers?|study|model|chip|funding|deal|breakthrough)\b/i.test(result.title)) score += 4;
+    if (/\b(announces?|launches?|released?|unveils?|raises?|acquires?|develops?|introduces?|reports?|researchers?|study|model|chip|funding|deal|breakthrough|policy|retires?)\b/i.test(result.title)) score += 4;
     if (/\b(202[5-9]|today|yesterday|hours ago|days ago|october|november|december)\b/i.test(text)) score += 2;
     if (/\b(according to|said|research|company|researchers|announced|launched)\b/i.test(result.snippet)) score += 1;
     if (/\/(20\d{2})\//.test(result.url)) score += 1;
@@ -84,7 +107,7 @@ async function searchProvider(query) {
     const found = [];
     const pattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<(?:a|div)[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/(?:a|div)>/gi;
     let match;
-    while ((match = pattern.exec(html)) && found.length < 12) {
+    while ((match = pattern.exec(html)) && found.length < 15) {
         const result = {
             title: cleanText(match[2]),
             snippet: cleanText(match[3]),
@@ -104,15 +127,12 @@ async function search(query) {
     }
 
     const isFreshTopic = /\b(news|latest|today|breaking|recent)\b/i.test(cleanQuery);
-    const baseQuery = isFreshTopic
-        ? cleanQuery + " specific announcements launches research"
-        : cleanQuery;
+    const baseQuery = isFreshTopic ? cleanQuery + " specific announcement launch study" : cleanQuery;
     const queryVariants = [
-        baseQuery,
-        baseQuery + " official announcement",
-        baseQuery + " research report"
+        baseQuery + " official source",
+        baseQuery + " company announcement",
+        baseQuery + " independent reporting research"
     ];
-
     const batches = await Promise.allSettled(queryVariants.map(searchProvider));
     const found = batches.flatMap(item => item.status === "fulfilled" ? item.value : []);
     if (!found.length) {
@@ -135,12 +155,14 @@ async function search(query) {
     const domainCounts = new Map();
     const diverse = [];
     for (const result of ranked) {
-        const domain = new URL(result.url).hostname.replace(/^www\./, "");
+        const domain = domainOf(result.url);
+        if (!domain) continue;
         const count = domainCounts.get(domain) || 0;
-        if (count >= 2) continue;
+        if (count >= 1) continue;
         domainCounts.set(domain, count + 1);
-        diverse.push(result);
-        if (diverse.length === 5) break;
+        diverse.push({ ...result, sourceType: matchesDomain(domain, officialDomains) ? "official" :
+            matchesDomain(domain, reputableNewsDomains) ? "established-news" : "other" });
+        if (diverse.length === 6) break;
     }
     return diverse;
 }
