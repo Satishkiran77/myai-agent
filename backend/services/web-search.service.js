@@ -96,8 +96,12 @@ function scoreResult(result) {
     return score;
 }
 
-async function searchProvider(query) {
-    const url = "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query);
+async function searchProvider(query, options = {}) {
+    const params = new URLSearchParams({ q: query });
+    // DuckDuckGo's past-month filter helps surface current articles before
+    // the stricter publication-date validation in article-fetch.service.
+    if (options.pastMonth) params.set("df", "m");
+    const url = "https://html.duckduckgo.com/html/?" + params.toString();
     const response = await fetch(url, {
         headers: { "User-Agent": "Mozilla/5.0 (compatible; BENZAssistant/1.0)" },
         signal: AbortSignal.timeout(15000)
@@ -129,18 +133,23 @@ async function search(query) {
 
     const isFreshTopic = /\b(news|latest|today|breaking|recent)\b/i.test(cleanQuery);
     const baseQuery = isFreshTopic ? cleanQuery + " specific announcement launch study" : cleanQuery;
+    const now = new Date();
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffDate = [cutoff.getFullYear(), String(cutoff.getMonth() + 1).padStart(2, "0"), String(cutoff.getDate()).padStart(2, "0")].join("-");
+    const currentMonth = now.toLocaleString("en-US", { month: "long", year: "numeric" });
     const queryVariants = isFreshTopic ? [
-        baseQuery + " site:openai.com OR site:anthropic.com OR site:blog.google OR site:deepmind.google",
-        baseQuery + " site:reuters.com OR site:apnews.com OR site:bbc.com OR site:theverge.com",
-        baseQuery + " site:techcrunch.com OR site:technologyreview.com OR site:wired.com",
-        baseQuery + " AI announcement research October 2026",
-        baseQuery + " artificial intelligence latest developments"
+        baseQuery + " after:" + cutoffDate + " official announcement",
+        baseQuery + " after:" + cutoffDate + " site:openai.com OR site:anthropic.com OR site:blog.google OR site:deepmind.google",
+        baseQuery + " after:" + cutoffDate + " site:reuters.com OR site:apnews.com OR site:bbc.com OR site:theverge.com",
+        baseQuery + " after:" + cutoffDate + " site:techcrunch.com OR site:technologyreview.com OR site:wired.com",
+        baseQuery + " " + currentMonth + " AI announcement research"
     ] : [
         baseQuery + " official source",
         baseQuery + " company announcement",
         baseQuery + " independent reporting research"
     ];
-    const batches = await Promise.allSettled(queryVariants.map(searchProvider));
+    const batches = await Promise.allSettled(queryVariants.map(query => searchProvider(query, { pastMonth: isFreshTopic })));
     const found = batches.flatMap(item => item.status === "fulfilled" ? item.value : []);
     if (!found.length) {
         const error = new Error("Internet search is unavailable or returned no results. Check your connection and try again.");
