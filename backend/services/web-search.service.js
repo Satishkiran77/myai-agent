@@ -108,13 +108,13 @@ async function searchProvider(query) {
     const found = [];
     const pattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<(?:a|div)[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/(?:a|div)>/gi;
     let match;
-    while ((match = pattern.exec(html)) && found.length < 15) {
+    while ((match = pattern.exec(html)) && found.length < 30) {
         const result = {
             title: cleanText(match[2]),
             snippet: cleanText(match[3]),
             url: decodeRedirect(decodeHtml(match[1]))
         };
-        if (result.title && result.snippet && /^https?:\/\//i.test(result.url)) found.push(result);
+        if (result.title && /^https?:\/\//i.test(result.url)) found.push(result);
     }
     return found;
 }
@@ -129,7 +129,13 @@ async function search(query) {
 
     const isFreshTopic = /\b(news|latest|today|breaking|recent)\b/i.test(cleanQuery);
     const baseQuery = isFreshTopic ? cleanQuery + " specific announcement launch study" : cleanQuery;
-    const queryVariants = [
+    const queryVariants = isFreshTopic ? [
+        baseQuery + " site:openai.com OR site:anthropic.com OR site:blog.google OR site:deepmind.google",
+        baseQuery + " site:reuters.com OR site:apnews.com OR site:bbc.com OR site:theverge.com",
+        baseQuery + " site:techcrunch.com OR site:technologyreview.com OR site:wired.com",
+        baseQuery + " AI announcement research October 2026",
+        baseQuery + " artificial intelligence latest developments"
+    ] : [
         baseQuery + " official source",
         baseQuery + " company announcement",
         baseQuery + " independent reporting research"
@@ -170,7 +176,7 @@ async function search(query) {
         domainCounts.set(domain, count + 1);
         diverse.push({ ...result, sourceType: matchesDomain(domain, officialDomains) ? "official" :
             matchesDomain(domain, reputableNewsDomains) ? "established-news" : "other" });
-        if (diverse.length === 6) break;
+        if (diverse.length === 8) break;
     }
     return diverse;
 }
