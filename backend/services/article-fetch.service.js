@@ -185,7 +185,9 @@ async function fetchArticle(result) {
             "article:published_time", "datePublished", "pubdate", "publish-date"
         ]);
         const extractedContent = content.length > 200 ? content : "";
-        const visibleDate = extractVisibleDate(stripMarkup(title) + " " + stripMarkup(description) + " " + extractedContent);
+        // Do not scan article body text for publication dates: it often mentions future events,
+        // scheduled launches, or deadlines that are not the article's publication date.
+        const visibleDate = extractVisibleDate(stripMarkup(title) + " " + stripMarkup(description));
         const publishedAt = metaDate || structuredDate || visibleDate || null;
         if (dateIsInFuture(publishedAt)) return null;
 
