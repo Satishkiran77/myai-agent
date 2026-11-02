@@ -32,8 +32,9 @@ router.post("/chat", async (req, res, next) => {
 
         if (intent.intent === "web_search") {
             searchQuery = webSearchService.buildSearchQuery(userMessage);
+            const isFreshSearch = /\b(news|latest|today|breaking|recent)\b/i.test(searchQuery);
             sources = await webSearchService.search(userMessage);
-            sources = await articleFetchService.enrichArticles(sources);
+            sources = await articleFetchService.enrichArticles(sources, isFreshSearch ? { maxAgeDays: 30 } : {});
             const independentDomains = new Set(sources.map(item => {
                 try { return new URL(item.url).hostname.toLowerCase().replace(/^www\./, ""); }
                 catch { return ""; }
@@ -46,13 +47,13 @@ router.post("/chat", async (req, res, next) => {
                     "Answer the user's actual question using only the search result titles, snippets, and extracted article content below.",
                     "Prefer sources marked official for company announcements and primary research. Use established-news sources as independent confirmation where available. Treat other sources as lower-confidence leads, not authoritative confirmation.",
                     "Do not treat a search-result ranking page, model directory, daily briefing, or aggregator as proof of a specific announcement. If such a page remains, identify it as a secondary roundup and seek specific underlying articles in the supplied sources.",
-                    "All future-dated pages have been excluded. Do not infer that an undated page is current; explicitly say when the publication date is unavailable.",
+                    "For latest-news searches, only dated articles from the last 30 days and from official or established-news domains are eligible. Undated, older, future-dated, and aggregator results are excluded. Do not fill gaps with remembered or guessed news.",
                     "Do not present a list of unrelated events as one confirmed story. Group each event with the sources that specifically support it.",
                     "Compare the independent sources. State whether a claim appears in multiple sources or only one; do not call a claim corroborated unless at least two different source domains support it.",
                     "If fewer than two useful independent sources are available, clearly say the research is limited rather than presenting it as a broad consensus.",
                     "Treat publication dates as important evidence. Mention the date when provided, and do not describe an older article as breaking or current news.",
                     "Some pages may block access or expose only a short description. Never claim full article access unless extracted article content is provided.",
-                    "Do not invent news events, dates, facts, article details, or sources.",
+                    "Do not invent news events, dates, facts, article details, or sources. If the supplied sources do not support a specific model name, release, price, benchmark, or company claim, do not mention it.",
                     "Do not recommend these websites as generic places to get news.",
                     "If a result is a topic page, homepage, or news aggregator rather than a specific article, say that clearly.",
                     "Prioritize extracted article content when available. If only a snippet is available, clearly say that the page could not provide full article text. Never invent missing details.",
