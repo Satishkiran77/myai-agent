@@ -35,7 +35,7 @@ router.post("/chat", async (req, res, next) => {
             sources = await webSearchService.search(userMessage);
             sources = await articleFetchService.enrichArticles(sources);
             const independentDomains = new Set(sources.map(item => {
-                try { return new URL(item.url).hostname.toLowerCase().replace(/^www\\./, ""); }
+                try { return new URL(item.url).hostname.toLowerCase().replace(/^www\./, ""); }
                 catch { return ""; }
             }).filter(Boolean));
             if (!sources.length) {
