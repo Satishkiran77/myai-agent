@@ -204,9 +204,18 @@ async function fetchArticle(result) {
     }
 }
 
-async function enrichArticles(results) {
+async function enrichArticles(results, options = {}) {
     const enriched = await Promise.all(results.slice(0, 6).map(fetchArticle));
-    return enriched.filter(Boolean);
+    const valid = enriched.filter(Boolean);
+    if (!Number.isFinite(options.maxAgeDays)) return valid;
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - options.maxAgeDays);
+    return valid.filter(item => {
+        if (!item.publishedAt) return false;
+        const published = new Date(item.publishedAt);
+        return !Number.isNaN(published.getTime()) && published <= new Date() && published >= cutoff;
+    });
 }
 
 module.exports = { enrichArticles };
