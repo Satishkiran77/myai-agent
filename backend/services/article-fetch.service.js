@@ -1,3 +1,6 @@
+const dns = require("node:dns").promises;
+const net = require("node:net");
+
 function decodeHtml(value) {
     return value
         .replace(/&amp;/g, "&")
@@ -32,30 +35,127 @@ function stripMarkup(value) {
         .trim());
 }
 
-async function fetchArticle(result) {
-    try {
-        const target = new URL(result.url);
-        if (!["http:", "https:"].includes(target.protocol) ||
-            /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[::1\])/i.test(target.hostname)) {
-            return result;
-        }
+function isPublicIPv4(address) {
+    const parts = address.split(".").map(Number);
+    if (parts.length !== 4 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+    const [a, b, c] = parts;
+    if (a === 0 || a === 10 || a === 127 || a >= 224) return false;
+    if (a === 100 && b >= 64 && b <= 127) return false;
+    if (a === 169 && b === 254) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && (b === 168 || (b === 0 && c === 0) || (b === 0 && c === 2))) return false;
+    if (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) return false;
+    if (a === 203 && b === 0 && c === 113) return false;
+    if (a === 192 && b === 88 && c === 99) return false;
+    if (a === 255) return false;
+    return true;
+}
 
+function isPublicIPv6(address) {
+    const value = address.toLowerCase().split("%")[0];
+    if (value.startsWith("::ffff:")) {
+        const mapped = value.slice(7);
+        if (net.isIP(mapped) === 4) return isPublicIPv4(mapped);
+        return false;
+    }
+    if (!value.startsWith("2") && !value.startsWith("3")) return false;
+    if (!/^[23][0-9a-f:]+$/.test(value)) return false;
+    if (value.startsWith("2001:db8:")) return false;
+    return true;
+}
+
+async function validatePublicUrl(value) {
+    let url;
+    try {
+        url = new URL(value);
+    } catch {
+        throw new Error("Invalid article URL.");
+    }
+
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password ||
+        (url.port && !["80", "443"].includes(url.port)) ||
+        url.hostname.endsWith(".local") || url.hostname.endsWith(".internal") ||
+        url.hostname === "localhost" || url.hostname.endsWith(".localhost")) {
+        throw new Error("Article URL is not allowed.");
+    }
+
+    const hostname = url.hostname.replace(/^\[|\]$/g, "");
+    const ipVersion = net.isIP(hostname);
+    if (ipVersion === 4 && !isPublicIPv4(hostname)) throw new Error("Private IP addresses are not allowed.");
+    if (ipVersion === 6 && !isPublicIPv6(hostname)) throw new Error("Non-public IPv6 addresses are not allowed.");
+
+    if (!ipVersion) {
+        const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+        if (!addresses.length || addresses.some(item =>
+            item.family === 4 ? !isPublicIPv4(item.address) :
+            item.family === 6 ? !isPublicIPv6(item.address) : true
+        )) {
+            throw new Error("The article host resolves to a non-public address.");
+        }
+    }
+    return url;
+}
+
+async function readLimitedBody(response, limit) {
+    const declaredLength = Number(response.headers.get("content-length") || 0);
+    if (declaredLength > limit) throw new Error("Article page is too large.");
+    if (!response.body) return "";
+    const reader = response.body.getReader();
+    const chunks = [];
+    let total = 0;
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            total += value.byteLength;
+            if (total > limit) {
+                await reader.cancel();
+                throw new Error("Article page is too large.");
+            }
+            chunks.push(Buffer.from(value));
+        }
+    } finally {
+        reader.releaseLock();
+    }
+    return Buffer.concat(chunks).toString("utf8");
+}
+
+async function requestArticlePage(initialUrl) {
+    let currentUrl = initialUrl;
+    for (let redirects = 0; redirects <= 3; redirects++) {
+        const target = await validatePublicUrl(currentUrl);
         const response = await fetch(target.href, {
             headers: {
                 "User-Agent": "Mozilla/5.0 (compatible; BENZAssistant/1.0)",
                 "Accept": "text/html,application/xhtml+xml"
             },
-            redirect: "follow",
+            redirect: "manual",
             signal: AbortSignal.timeout(10000)
         });
 
-        const finalUrl = new URL(response.url);
-        if (!response.ok || !["http:", "https:"].includes(finalUrl.protocol) ||
-            !(response.headers.get("content-type") || "").includes("text/html")) {
-            return result;
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+            const location = response.headers.get("location");
+            await response.body?.cancel();
+            if (!location || redirects === 3) throw new Error("Too many or invalid article redirects.");
+            currentUrl = new URL(location, target).href;
+            continue;
         }
 
-        const html = (await response.text()).slice(0, 1000000);
+        if (!response.ok || !(response.headers.get("content-type") || "").toLowerCase().includes("text/html")) {
+            await response.body?.cancel();
+            return null;
+        }
+        return { response, finalUrl: target.href };
+    }
+    return null;
+}
+
+async function fetchArticle(result) {
+    try {
+        const page = await requestArticlePage(result.url);
+        if (!page) return result;
+
+        const html = await readLimitedBody(page.response, 1000000);
         const articleMatch = html.match(/<(article|main)\b[^>]*>([\s\S]*?)<\/\1>/i);
         const rawContent = articleMatch ? articleMatch[2] : html;
         const content = stripMarkup(rawContent).slice(0, 5000);
