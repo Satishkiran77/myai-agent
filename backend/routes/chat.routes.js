@@ -63,9 +63,12 @@ router.post("/chat", async (req, res, next) => {
                     "LIVE SEARCH RESULTS:",
                     ...sources.map((item, index) => (index + 1) + ". SOURCE TYPE: " + (item.sourceType || "other") + "\nTITLE: " + item.title + "\nPUBLISHED: " + (item.publishedAt || "Not provided") + "\nDATE EVIDENCE: " + (item.dateSource || "Unavailable") + "\nDESCRIPTION: " + item.snippet + "\nARTICLE CONTENT: " + (item.articleContent || "Not available; use description only.") + "\nSOURCE URL: " + item.url)
                 ].join("\n\n");
+                // Keep one system message for local models that handle multiple system
+                // messages inconsistently. Preserve profile memory in the same instruction.
+                const combinedSystemPrompt = [searchContext, memoryPrompt].filter(Boolean).join("\n\n");
                 reply = await ollamaService.chat([
-                    { role: "system", content: searchContext },
-                    ...modelMessages
+                    { role: "system", content: combinedSystemPrompt },
+                    ...messages
                 ]);
             }
         } else {
