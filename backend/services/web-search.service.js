@@ -72,10 +72,11 @@ function isGenericPage(result) {
         const title = result.title.toLowerCase();
         const genericPath = /\/(category|categories|tag|tags|topic|topics|search|latest|news|research|artificial-intelligence|ai-news|this-month|model-releases)(\/|\.html|$)/.test(path);
         const homepage = !path || path === "/index.html" || path === "/news.html";
-        const genericTitle = /\b(latest|daily|news|updates|recap|roundup|digest|newsletter|artificial intelligence|ai)\b/.test(title) &&
+        const genericTitle = /\b(latest|daily|news|updates|recap|roundup|digest|newsletter|artificial intelligence|ai news today|news today|release tracker|model releases|release timeline|launch tracker|all launches)\b/.test(title) &&
             !/\b(announces?|launches?|released?|unveils?|raises?|acquires?|develops?|introduces?|reports?|researchers?|study|model|chip|funding|deal|breakthrough|policy|retires?)\b/.test(title);
-        const genericSnippet = /latest (?:ai )?news|daily ai news|news recap|news roundup|news digest|read the latest|stay updated|browse thousands|news and analysis from|summari[sz]ed in minutes/i.test(result.snippet);
-        return genericPath || homepage || (genericTitle && genericSnippet);
+        const genericSnippet = /latest (?:ai )?news|daily ai news|news recap|news roundup|news digest|read the latest|stay updated|browse thousands|news and analysis from|summari[sz]ed in minutes|track(?:er|ing)? (?:all )?(?:the )?(?:latest )?(?:ai )?(?:model )?releases|complete timeline of (?:ai )?model releases/i.test(result.snippet);
+        const roundupTitle = /\b(?:ai news today|latest ai news|ai news roundup|ai news recap|ai release tracker|model release tracker|model releases timeline)\b/.test(title);
+        return genericPath || homepage || roundupTitle || (genericTitle && genericSnippet);
     } catch {
         return true;
     }
@@ -151,7 +152,14 @@ async function search(query) {
         if (!previous || scoreResult(result) > scoreResult(previous)) unique.set(key, result);
     }
 
-    const ranked = [...unique.values()].sort((a, b) => scoreResult(b) - scoreResult(a));
+    let ranked = [...unique.values()].sort((a, b) => scoreResult(b) - scoreResult(a));
+    // Broad "latest news" searches must not use low-confidence aggregators as evidence.
+    if (isFreshTopic) {
+        ranked = ranked.filter(result => {
+            const domain = domainOf(result.url);
+            return matchesDomain(domain, officialDomains) || matchesDomain(domain, reputableNewsDomains);
+        });
+    }
     const domainCounts = new Map();
     const diverse = [];
     for (const result of ranked) {
