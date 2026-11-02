@@ -32,6 +32,19 @@ function buildSearchQuery(message) {
         .trim();
 }
 
+function normalizeUrl(value) {
+    try {
+        const url = new URL(value);
+        url.hash = "";
+        for (const key of [...url.searchParams.keys()]) {
+            if (/^(utm_|fbclid$|gclid$|ref$)/i.test(key)) url.searchParams.delete(key);
+        }
+        return url.href.replace(/\/$/, "");
+    } catch {
+        return value;
+    }
+}
+
 function isGenericPage(result) {
     try {
         const url = new URL(result.url);
@@ -55,7 +68,31 @@ function scoreResult(result) {
     if (/\b(202[5-9]|today|yesterday|hours ago|days ago|october|november|december)\b/i.test(text)) score += 2;
     if (/\b(according to|said|research|company|researchers|announced|launched)\b/i.test(result.snippet)) score += 1;
     if (/\/(20\d{2})\//.test(result.url)) score += 1;
+    if (/\b(official|press release|study|paper|report)\b/i.test(text)) score += 1;
     return score;
+}
+
+async function searchProvider(query) {
+    const url = "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query);
+    const response = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; BENZAssistant/1.0)" },
+        signal: AbortSignal.timeout(15000)
+    });
+    if (!response.ok) throw new Error("Search provider returned status " + response.status + ".");
+
+    const html = await response.text();
+    const found = [];
+    const pattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<(?:a|div)[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/(?:a|div)>/gi;
+    let match;
+    while ((match = pattern.exec(html)) && found.length < 12) {
+        const result = {
+            title: cleanText(match[2]),
+            snippet: cleanText(match[3]),
+            url: decodeRedirect(decodeHtml(match[1]))
+        };
+        if (result.title && result.snippet && /^https?:\/\//i.test(result.url)) found.push(result);
+    }
+    return found;
 }
 
 async function search(query) {
@@ -66,49 +103,46 @@ async function search(query) {
         throw error;
     }
 
-    const providerQuery = /\b(news|latest|today|breaking)\b/i.test(cleanQuery)
+    const isFreshTopic = /\b(news|latest|today|breaking|recent)\b/i.test(cleanQuery);
+    const baseQuery = isFreshTopic
         ? cleanQuery + " specific announcements launches research"
         : cleanQuery;
-    const url = "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(providerQuery);
-    let response;
-    try {
-        response = await fetch(url, {
-            headers: { "User-Agent": "Mozilla/5.0 (compatible; BENZAssistant/1.0)" },
-            signal: AbortSignal.timeout(15000)
-        });
-    } catch {
-        const error = new Error("Internet search is unavailable. Check your internet connection and try again.");
+    const queryVariants = [
+        baseQuery,
+        baseQuery + " official announcement",
+        baseQuery + " research report"
+    ];
+
+    const batches = await Promise.allSettled(queryVariants.map(searchProvider));
+    const found = batches.flatMap(item => item.status === "fulfilled" ? item.value : []);
+    if (!found.length) {
+        const error = new Error("Internet search is unavailable or returned no results. Check your connection and try again.");
         error.status = 503;
         throw error;
     }
 
-    if (!response.ok) {
-        const error = new Error("The search provider returned status " + response.status + ".");
-        error.status = 503;
-        throw error;
+    const unique = new Map();
+    for (const result of found) {
+        if (isGenericPage(result)) continue;
+        const normalized = normalizeUrl(result.url);
+        const titleKey = result.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        const key = normalized || titleKey;
+        const previous = unique.get(key);
+        if (!previous || scoreResult(result) > scoreResult(previous)) unique.set(key, result);
     }
 
-    const html = await response.text();
-    const found = [];
-    const pattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<(?:a|div)[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/(?:a|div)>/gi;
-    let match;
-
-    while ((match = pattern.exec(html)) && found.length < 12) {
-        const result = {
-            title: cleanText(match[2]),
-            snippet: cleanText(match[3]),
-            url: decodeRedirect(decodeHtml(match[1]))
-        };
-        if (result.title && result.snippet && /^https?:\/\//i.test(result.url)) {
-            found.push(result);
-        }
+    const ranked = [...unique.values()].sort((a, b) => scoreResult(b) - scoreResult(a));
+    const domainCounts = new Map();
+    const diverse = [];
+    for (const result of ranked) {
+        const domain = new URL(result.url).hostname.replace(/^www\./, "");
+        const count = domainCounts.get(domain) || 0;
+        if (count >= 2) continue;
+        domainCounts.set(domain, count + 1);
+        diverse.push(result);
+        if (diverse.length === 5) break;
     }
-
-    const specificResults = found
-        .filter(result => !isGenericPage(result))
-        .sort((a, b) => scoreResult(b) - scoreResult(a));
-
-    return specificResults.slice(0, 5);
+    return diverse;
 }
 
 module.exports = { search, buildSearchQuery };
