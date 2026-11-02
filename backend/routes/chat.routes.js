@@ -34,12 +34,20 @@ router.post("/chat", async (req, res, next) => {
             searchQuery = webSearchService.buildSearchQuery(userMessage);
             sources = await webSearchService.search(userMessage);
             sources = await articleFetchService.enrichArticles(sources);
+            const independentDomains = new Set(sources.map(item => {
+                try { return new URL(item.url).hostname.toLowerCase().replace(/^www\\./, ""); }
+                catch { return ""; }
+            }).filter(Boolean));
             if (!sources.length) {
-                reply = "I couldn't find useful search results for that request. Try a more specific search phrase.";
+                reply = "I couldn't find useful, date-eligible search results for that request. Future-dated or generic pages were excluded. Try a more specific search phrase.";
             } else {
                 const searchContext = [
                     "You are BENZ, an assistant that has just performed a live web search.",
                     "Answer the user's actual question using only the search result titles, snippets, and extracted article content below.",
+                    "Prefer sources marked official for company announcements and primary research. Use established-news sources as independent confirmation where available. Treat other sources as lower-confidence leads, not authoritative confirmation.",
+                    "Do not treat a search-result ranking page, model directory, daily briefing, or aggregator as proof of a specific announcement. If such a page remains, identify it as a secondary roundup and seek specific underlying articles in the supplied sources.",
+                    "All future-dated pages have been excluded. Do not infer that an undated page is current; explicitly say when the publication date is unavailable.",
+                    "Do not present a list of unrelated events as one confirmed story. Group each event with the sources that specifically support it.",
                     "Compare the independent sources. State whether a claim appears in multiple sources or only one; do not call a claim corroborated unless at least two different source domains support it.",
                     "If fewer than two useful independent sources are available, clearly say the research is limited rather than presenting it as a broad consensus.",
                     "Treat publication dates as important evidence. Mention the date when provided, and do not describe an older article as breaking or current news.",
@@ -49,9 +57,10 @@ router.post("/chat", async (req, res, next) => {
                     "If a result is a topic page, homepage, or news aggregator rather than a specific article, say that clearly.",
                     "Prioritize extracted article content when available. If only a snippet is available, clearly say that the page could not provide full article text. Never invent missing details.",
                     "Keep the answer concise. Do not create extra headlines that are not present in the result titles.",
+                    "RESEARCH COVERAGE: " + independentDomains.size + " distinct source domains. " + (independentDomains.size < 2 ? "Coverage is limited; do not imply independent corroboration." : "Check each claim against the specific sources that support it."),
                     "LIVE SEARCH QUERY: " + searchQuery,
                     "LIVE SEARCH RESULTS:",
-                    ...sources.map((item, index) => (index + 1) + ". TITLE: " + item.title + "\nPUBLISHED: " + (item.publishedAt || "Not provided") + "\nDESCRIPTION: " + item.snippet + "\nARTICLE CONTENT: " + (item.articleContent || "Not available; use description only.") + "\nSOURCE URL: " + item.url)
+                    ...sources.map((item, index) => (index + 1) + ". SOURCE TYPE: " + (item.sourceType || "other") + "\nTITLE: " + item.title + "\nPUBLISHED: " + (item.publishedAt || "Not provided") + "\nDATE EVIDENCE: " + (item.dateSource || "Unavailable") + "\nDESCRIPTION: " + item.snippet + "\nARTICLE CONTENT: " + (item.articleContent || "Not available; use description only.") + "\nSOURCE URL: " + item.url)
                 ].join("\n\n");
                 reply = await ollamaService.chat([
                     { role: "system", content: searchContext },
