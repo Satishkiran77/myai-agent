@@ -82,10 +82,26 @@ router.post("/chat", async (req, res, next) => {
                 // Keep one system message for local models that handle multiple system
                 // messages inconsistently. Preserve profile memory in the same instruction.
                 const combinedSystemPrompt = [searchContext, memoryPrompt].filter(Boolean).join("\n\n");
-                reply = await ollamaService.chat([
-                    { role: "system", content: combinedSystemPrompt },
-                    ...messages
-                ]);
+                if (isFreshSearch) {
+                    // For latest-news requests, do not ask a generative model to
+                    // invent or combine headlines. Build the response only from
+                    // the dated source titles and search-provider descriptions.
+                    reply = "Recent AI news coverage found (published within the last 30 days):\n\n" +
+                        sources.map((item, index) => {
+                            const date = item.publishedAt ? new Date(item.publishedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "Date unavailable";
+                            const description = String(item.snippet || "").replace(/\\s+/g, " ").trim();
+                            return (index + 1) + ". " + item.title + "\n" +
+                                "Date: " + date + "\n" +
+                                (description ? description.slice(0, 360) : "The source page did not provide a short description.") +
+                                "\nSource: " + item.url;
+                        }).join("\n\n") +
+                        "\n\nThese are source-based headlines and descriptions, not independently verified conclusions. Open the source cards to read the articles.";
+                } else {
+                    reply = await ollamaService.chat([
+                        { role: "system", content: combinedSystemPrompt },
+                        ...messages
+                    ]);
+                }
             }
         } else {
             reply = await ollamaService.chat(modelMessages);
