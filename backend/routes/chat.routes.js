@@ -33,8 +33,21 @@ router.post("/chat", async (req, res, next) => {
         if (intent.intent === "web_search") {
             searchQuery = webSearchService.buildSearchQuery(userMessage);
             const isFreshSearch = /\b(news|latest|today|breaking|recent)\b/i.test(searchQuery);
-            sources = await webSearchService.search(userMessage);
-            sources = await articleFetchService.enrichArticles(sources, isFreshSearch ? { maxAgeDays: 30 } : {});
+            // Search providers can return different results between requests. If a
+            // fresh-news batch contains no date-eligible articles, retry once before
+            // reporting that no useful results were found.
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const candidates = await webSearchService.search(userMessage);
+                const eligible = await articleFetchService.enrichArticles(
+                    candidates,
+                    isFreshSearch ? { maxAgeDays: 30 } : {}
+                );
+                if (eligible.length) {
+                    sources = eligible;
+                    break;
+                }
+                if (!isFreshSearch || attempt === 1) sources = eligible;
+            }
             const independentDomains = new Set(sources.map(item => {
                 try { return new URL(item.url).hostname.toLowerCase().replace(/^www\./, ""); }
                 catch { return ""; }
