@@ -150,6 +150,24 @@ async function requestArticlePage(initialUrl) {
     return null;
 }
 
+function extractVisibleDate(value) {
+    const text = String(value || "").slice(0, 1800);
+    const match = text.match(/\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+20\d{2}\b|\b20\d{2}-\d{2}-\d{2}\b/i);
+    return match ? match[0] : "";
+}
+
+function dateIsInFuture(value) {
+    if (!value) return false;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return false;
+    const publishedDay = /^\d{4}-\d{2}-\d{2}/.test(value)
+        ? value.slice(0, 10)
+        : [parsed.getFullYear(), String(parsed.getMonth() + 1).padStart(2, "0"), String(parsed.getDate()).padStart(2, "0")].join("-");
+    const now = new Date();
+    const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+    return publishedDay > today;
+}
+
 async function fetchArticle(result) {
     try {
         const page = await requestArticlePage(result.url);
@@ -162,24 +180,33 @@ async function fetchArticle(result) {
         const title = extractMeta(html, ["og:title", "twitter:title"]) ||
             ((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || result.title);
         const description = extractMeta(html, ["og:description", "description"]) || result.snippet;
-        const publishedAt = extractMeta(html, [
+        const structuredDate = (html.match(/["']datePublished["']\s*:\s*["']([^"']+)["']/i) || [])[1] || "";
+        const metaDate = extractMeta(html, [
             "article:published_time", "datePublished", "pubdate", "publish-date"
         ]);
+        const extractedContent = content.length > 200 ? content : "";
+        const visibleDate = extractVisibleDate(stripMarkup(title) + " " + stripMarkup(description) + " " + extractedContent);
+        const publishedAt = metaDate || structuredDate || visibleDate || null;
+        if (dateIsInFuture(publishedAt)) return null;
 
         return {
             ...result,
             title: stripMarkup(title) || result.title,
             snippet: stripMarkup(description) || result.snippet,
-            publishedAt: publishedAt || null,
-            articleContent: content.length > 200 ? content : ""
+            publishedAt,
+            dateSource: metaDate ? "page-metadata" : structuredDate ? "structured-data" : visibleDate ? "page-text" : null,
+            articleContent: extractedContent
         };
     } catch {
-        return result;
+        const visibleDate = extractVisibleDate(result.title + " " + result.snippet);
+        if (dateIsInFuture(visibleDate)) return null;
+        return { ...result, publishedAt: visibleDate || null, dateSource: visibleDate ? "search-result-text" : null };
     }
 }
 
 async function enrichArticles(results) {
-    return Promise.all(results.slice(0, 3).map(fetchArticle));
+    const enriched = await Promise.all(results.slice(0, 6).map(fetchArticle));
+    return enriched.filter(Boolean);
 }
 
 module.exports = { enrichArticles };
