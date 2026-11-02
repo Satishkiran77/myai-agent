@@ -176,7 +176,12 @@ async function fetchArticle(result) {
         const html = await readLimitedBody(page.response, 1000000);
         const articleMatch = html.match(/<(article|main)\b[^>]*>([\s\S]*?)<\/\1>/i);
         const rawContent = articleMatch ? articleMatch[2] : html;
-        const content = stripMarkup(rawContent).slice(0, 5000);
+        let cleanContent = stripMarkup(rawContent);
+        // Remove recommendation/footer modules that some publishers place inside <article>.
+        // Their headlines are not part of the article and must not become research evidence.
+        const relatedContentStart = cleanContent.search(/\\b(?:Related stories|Related articles|More stories|Recommended for you|You may also like|Posted in:)\\b/i);
+        if (relatedContentStart >= 0) cleanContent = cleanContent.slice(0, relatedContentStart).trim();
+        const content = cleanContent.slice(0, 5000);
         const title = extractMeta(html, ["og:title", "twitter:title"]) ||
             ((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || result.title);
         const description = extractMeta(html, ["og:description", "description"]) || result.snippet;
