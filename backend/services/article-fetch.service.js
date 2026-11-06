@@ -212,7 +212,7 @@ async function fetchArticle(result) {
 }
 
 async function enrichArticles(results, options = {}) {
-    const enriched = await Promise.all(results.slice(0, 8).map(fetchArticle));
+    const enriched = await Promise.all(results.slice(0, 16).map(fetchArticle));
     const valid = enriched.filter(Boolean);
     if (!Number.isFinite(options.maxAgeDays)) return valid;
 
