@@ -216,10 +216,13 @@ async function search(query) {
     // Add focused searches for every company explicitly named by the user.
     // This prevents a broad multi-company query from returning only one company's news.
     const targetedVariants = isFreshTopic ? companies.flatMap(company => {
-        const officialSiteQuery = company.officialDomains.map(domain => "site:" + domain).join(" OR ");
+        const officialSiteQueries = company.officialDomains.flatMap(domain => [
+            "site:" + domain + " " + company.name + " AI announcement OR launch OR research after:" + cutoffDate,
+            "site:" + domain + " " + company.name + " AI " + currentMonth
+        ]);
         return [
             company.name + " AI announcement OR launch OR research after:" + cutoffDate + " English",
-            "(" + officialSiteQuery + ") " + company.name + " AI announcement OR research OR release after:" + cutoffDate,
+            ...officialSiteQueries,
             company.name + " AI news after:" + cutoffDate + " site:reuters.com OR site:apnews.com OR site:bbc.com OR site:theverge.com OR site:techcrunch.com OR site:wired.com",
             company.name + " latest AI product model research announcement " + currentMonth
         ];
