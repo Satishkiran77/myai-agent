@@ -217,7 +217,8 @@ async function search(query) {
     // This prevents a broad multi-company query from returning only one company's news.
     const targetedVariants = isFreshTopic ? companies.flatMap(company => [
         company.name + " AI announcement OR launch OR research after:" + cutoffDate + " English",
-        "(" + company.name + ") AI news after:" + cutoffDate + " site:reuters.com OR site:apnews.com OR site:bbc.com OR site:theverge.com OR site:techcrunch.com OR site:wired.com"
+        "site:" + company.officialDomains[0] + " " + company.name + " AI announcement OR research OR release",
+        company.name + " AI news after:" + cutoffDate + " site:reuters.com OR site:apnews.com OR site:bbc.com OR site:theverge.com OR site:techcrunch.com OR site:wired.com"
     ]) : [];
     const allQueryVariants = [...new Set([...queryVariants, ...targetedVariants])];
     const batches = await Promise.allSettled(allQueryVariants.map(query => searchProvider(query, { pastMonth: isFreshTopic })));
