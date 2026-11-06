@@ -79,13 +79,31 @@ const companyProfiles = [
     }
 ];
 
+function containsAlias(value, alias) {
+    const normalizedValue = " " + String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() + " ";
+    const normalizedAlias = " " + String(alias || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() + " ";
+    return normalizedValue.includes(normalizedAlias);
+}
+
 function requestedCompanies(query) {
-    const text = String(query || "").toLowerCase();
     return companyProfiles.filter(company =>
-        company.aliases.some(alias => new RegExp("\\b" + alias.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\const reputableNewsDomains = [
-    "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "theverge.com",
-    "techcrunch.com", "technologyreview.com", "wired.com", "ft.com", "nytimes.com"
-];
+        company.aliases.some(alias => containsAlias(query, alias))
+    );
+}
+
+function matchesCompany(result, company) {
+    const text = String(result.title || "") + " " + String(result.snippet || "");
+    const domain = domainOf(result.url);
+    return company.aliases.some(alias => containsAlias(text, alias)) ||
+        matchesDomain(domain, company.officialDomains);
+}
+
+function looksNonEnglish(result) {
+    const url = String(result.url || "").toLowerCase();
+    const text = (String(result.title || "") + " " + String(result.snippet || "")).toLowerCase();
+    const spanishSignals = /\\b(desarrolla|desarrollado|una|para|seg[uú]n|m[eé]dicos|precisi[oó]n|investigaci[oó]n|anuncia|lanzamiento|nueva|nuevas|empresa|inteligencia artificial)\\b/;
+    return /\\/(?:es|es-es|es-mx)\\//.test(url) || spanishSignals.test(text);
+}
 
 function matchesDomain(domain, list) {") + "\\b", "i").test(text))
     );
@@ -138,7 +156,6 @@ function scoreResult(result, companies = []) {
     let score = 0;
     for (const company of companies) {
         if (matchesCompany(result, company)) score += 9;
-        else score -= 12;
     }
     // Prefer English-language coverage when the user writes the query in English.
     if (looksNonEnglish(result)) score -= 8;
