@@ -67,7 +67,9 @@ router.post("/chat", async (req, res, next) => {
                         try { return new URL(item.url).hostname.toLowerCase(); }
                         catch { return ""; }
                     })();
-                    const normalizedText = " " + [item.title, item.snippet, item.articleContent]
+                    // Use headline and search description for company relevance.
+                    // A company mentioned only deep in another company's article is not news coverage.
+                    const normalizedText = " " + [item.title, item.snippet]
                         .join(" ").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() + " ";
                     const aliases = company === "openai" ? ["openai", "chatgpt", "gpt"] :
                         company === "google" ? ["google", "deepmind", "gemini", "genie"] :
