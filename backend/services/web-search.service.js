@@ -61,6 +61,57 @@ const reputableNewsDomains = [
     "techcrunch.com", "technologyreview.com", "wired.com", "ft.com", "nytimes.com"
 ];
 
+const companyProfiles = [
+    {
+        name: "OpenAI",
+        aliases: ["openai", "chatgpt", "gpt"],
+        officialDomains: ["openai.com"]
+    },
+    {
+        name: "Google",
+        aliases: ["google", "deepmind", "gemini", "genie"],
+        officialDomains: ["blog.google", "deepmind.google", "googleblog.com"]
+    },
+    {
+        name: "Microsoft",
+        aliases: ["microsoft", "copilot", "azure ai"],
+        officialDomains: ["microsoft.com", "blogs.microsoft.com"]
+    }
+];
+
+function requestedCompanies(query) {
+    const text = String(query || "").toLowerCase();
+    return companyProfiles.filter(company =>
+        company.aliases.some(alias => new RegExp("\\b" + alias.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\const reputableNewsDomains = [
+    "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "theverge.com",
+    "techcrunch.com", "technologyreview.com", "wired.com", "ft.com", "nytimes.com"
+];
+
+function matchesDomain(domain, list) {") + "\\b", "i").test(text))
+    );
+}
+
+function matchesCompany(result, company) {
+    const text = String(result.title || "") + " " + String(result.snippet || "");
+    const domain = domainOf(result.url);
+    return company.aliases.some(alias => {
+        const escaped = alias.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\const reputableNewsDomains = [
+    "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "theverge.com",
+    "techcrunch.com", "technologyreview.com", "wired.com", "ft.com", "nytimes.com"
+];
+
+function matchesDomain(domain, list) {");
+        return new RegExp("\\b" + escaped + "\\b", "i").test(text);
+    }) || matchesDomain(domain, company.officialDomains);
+}
+
+function looksNonEnglish(result) {
+    const url = String(result.url || "").toLowerCase();
+    const text = (String(result.title || "") + " " + String(result.snippet || "")).toLowerCase();
+    const spanishSignals = /\\b(desarrolla|desarrollado|una|para|seg[uú]n|m[eé]dicos|precisi[oó]n|investigaci[oó]n|anuncia|lanzamiento|nueva|nuevas|empresa|inteligencia artificial)\\b/;
+    return /\\/(?:es|es-es|es-mx)\\//.test(url) || spanishSignals.test(text);
+}
+
 function matchesDomain(domain, list) {
     return list.some(item => domain === item || domain.endsWith("." + item));
 }
@@ -82,9 +133,15 @@ function isGenericPage(result) {
     }
 }
 
-function scoreResult(result) {
+function scoreResult(result, companies = []) {
     const domain = domainOf(result.url);
     let score = 0;
+    for (const company of companies) {
+        if (matchesCompany(result, company)) score += 9;
+        else score -= 12;
+    }
+    // Prefer English-language coverage when the user writes the query in English.
+    if (looksNonEnglish(result)) score -= 8;
     if (matchesDomain(domain, officialDomains)) score += 8;
     else if (matchesDomain(domain, reputableNewsDomains)) score += 5;
     const text = result.title + " " + result.snippet;
@@ -138,6 +195,7 @@ async function search(query) {
     cutoff.setDate(cutoff.getDate() - 30);
     const cutoffDate = [cutoff.getFullYear(), String(cutoff.getMonth() + 1).padStart(2, "0"), String(cutoff.getDate()).padStart(2, "0")].join("-");
     const currentMonth = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+    const companies = requestedCompanies(cleanQuery);
     const queryVariants = isFreshTopic ? [
         baseQuery + " after:" + cutoffDate + " official announcement",
         baseQuery + " after:" + cutoffDate + " site:openai.com OR site:anthropic.com OR site:blog.google OR site:deepmind.google",
@@ -149,7 +207,15 @@ async function search(query) {
         baseQuery + " company announcement",
         baseQuery + " independent reporting research"
     ];
-    const batches = await Promise.allSettled(queryVariants.map(query => searchProvider(query, { pastMonth: isFreshTopic })));
+
+    // Add focused searches for every company explicitly named by the user.
+    // This prevents a broad multi-company query from returning only one company's news.
+    const targetedVariants = isFreshTopic ? companies.flatMap(company => [
+        company.name + " AI announcement OR launch OR research after:" + cutoffDate + " English",
+        "(" + company.name + ") AI news after:" + cutoffDate + " site:reuters.com OR site:apnews.com OR site:bbc.com OR site:theverge.com OR site:techcrunch.com OR site:wired.com"
+    ]) : [];
+    const allQueryVariants = [...new Set([...queryVariants, ...targetedVariants])];
+    const batches = await Promise.allSettled(allQueryVariants.map(query => searchProvider(query, { pastMonth: isFreshTopic })));
     const found = batches.flatMap(item => item.status === "fulfilled" ? item.value : []);
     if (!found.length) {
         const error = new Error("Internet search is unavailable or returned no results. Check your connection and try again.");
@@ -160,14 +226,17 @@ async function search(query) {
     const unique = new Map();
     for (const result of found) {
         if (isGenericPage(result)) continue;
+        // When companies were explicitly requested, discard articles that do not
+        // identify any requested company in the headline, snippet, or official domain.
+        if (companies.length && !companies.some(company => matchesCompany(result, company))) continue;
         const normalized = normalizeUrl(result.url);
         const titleKey = result.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
         const key = normalized || titleKey;
         const previous = unique.get(key);
-        if (!previous || scoreResult(result) > scoreResult(previous)) unique.set(key, result);
+        if (!previous || scoreResult(result, companies) > scoreResult(previous, companies)) unique.set(key, result);
     }
 
-    let ranked = [...unique.values()].sort((a, b) => scoreResult(b) - scoreResult(a));
+    let ranked = [...unique.values()].sort((a, b) => scoreResult(b, companies) - scoreResult(a, companies));
     // Broad "latest news" searches must not use low-confidence aggregators as evidence.
     if (isFreshTopic) {
         ranked = ranked.filter(result => {
@@ -177,15 +246,27 @@ async function search(query) {
     }
     const domainCounts = new Map();
     const diverse = [];
-    for (const result of ranked) {
+    const addResult = result => {
         const domain = domainOf(result.url);
-        if (!domain) continue;
-        const count = domainCounts.get(domain) || 0;
-        if (count >= 1) continue;
-        domainCounts.set(domain, count + 1);
+        if (!domain || (domainCounts.get(domain) || 0) >= 1) return false;
+        domainCounts.set(domain, 1);
         diverse.push({ ...result, sourceType: matchesDomain(domain, officialDomains) ? "official" :
             matchesDomain(domain, reputableNewsDomains) ? "established-news" : "other" });
-        if (diverse.length === 8) break;
+        return true;
+    };
+
+    // Reserve an initial slot for each requested company when relevant results exist.
+    for (const company of companies) {
+        const candidate = ranked.find(result =>
+            matchesCompany(result, company) && !diverse.some(item => normalizeUrl(item.url) === normalizeUrl(result.url))
+        );
+        if (candidate) addResult(candidate);
+    }
+
+    // Fill remaining slots with the strongest relevant, domain-diverse results.
+    for (const result of ranked) {
+        if (diverse.length >= 8) break;
+        addResult(result);
     }
     return diverse;
 }
