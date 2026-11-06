@@ -215,11 +215,15 @@ async function search(query) {
 
     // Add focused searches for every company explicitly named by the user.
     // This prevents a broad multi-company query from returning only one company's news.
-    const targetedVariants = isFreshTopic ? companies.flatMap(company => [
-        company.name + " AI announcement OR launch OR research after:" + cutoffDate + " English",
-        "site:" + company.officialDomains[0] + " " + company.name + " AI announcement OR research OR release",
-        company.name + " AI news after:" + cutoffDate + " site:reuters.com OR site:apnews.com OR site:bbc.com OR site:theverge.com OR site:techcrunch.com OR site:wired.com"
-    ]) : [];
+    const targetedVariants = isFreshTopic ? companies.flatMap(company => {
+        const officialSiteQuery = company.officialDomains.map(domain => "site:" + domain).join(" OR ");
+        return [
+            company.name + " AI announcement OR launch OR research after:" + cutoffDate + " English",
+            "(" + officialSiteQuery + ") " + company.name + " AI announcement OR research OR release after:" + cutoffDate,
+            company.name + " AI news after:" + cutoffDate + " site:reuters.com OR site:apnews.com OR site:bbc.com OR site:theverge.com OR site:techcrunch.com OR site:wired.com",
+            company.name + " latest AI product model research announcement " + currentMonth
+        ];
+    }) : [];
     const allQueryVariants = [...new Set([...queryVariants, ...targetedVariants])];
     const batches = await Promise.allSettled(allQueryVariants.map(query => searchProvider(query, { pastMonth: isFreshTopic })));
     const found = batches.flatMap(item => item.status === "fulfilled" ? item.value : []);
@@ -254,7 +258,7 @@ async function search(query) {
     const diverse = [];
     const addResult = result => {
         const domain = domainOf(result.url);
-        if (!domain || (domainCounts.get(domain) || 0) >= 1) return false;
+        if (!domain || (domainCounts.get(domain) || 0) >= 2) return false;
         domainCounts.set(domain, 1);
         diverse.push({ ...result, sourceType: matchesDomain(domain, officialDomains) ? "official" :
             matchesDomain(domain, reputableNewsDomains) ? "established-news" : "other" });
@@ -271,7 +275,7 @@ async function search(query) {
 
     // Fill remaining slots with the strongest relevant, domain-diverse results.
     for (const result of ranked) {
-        if (diverse.length >= 8) break;
+        if (diverse.length >= 12) break;
         addResult(result);
     }
     return diverse;
