@@ -41,14 +41,14 @@ myai-agent/
 - Node.js 18 or later (Node.js 20+ recommended).
 - Ollama installed and running.
 - Download the model if needed: `ollama pull llama3.2`.
-- In `backend`, install dependencies with `npm install`, then start with `npm start`.
+- In `backend`, set a private access token, install dependencies with `npm install`, then start with `npm start`.
 - Open http://localhost:5000.
 
-On Windows PowerShell, use `npm.cmd install` and `npm.cmd start` if script execution policy blocks `npm`.
+On Windows PowerShell, set a token for the current terminal with `$env:BENZ_ACCESS_TOKEN = "your-long-random-secret"`, then use `npm.cmd install` and `npm.cmd start` if script execution policy blocks `npm`. Keep this token private; do not commit it or share it. The browser asks for the token once per tab session.
 
 ## Configuration
 
-Optional environment variables:
+Environment variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -58,8 +58,9 @@ Optional environment variables:
 | `OLLAMA_MODEL` | `llama3.2` | Model name |
 | `OLLAMA_TIMEOUT_MS` | `120000` | Maximum model response wait |
 | `JSON_BODY_LIMIT` | `1mb` | Maximum JSON request size |
+| `BENZ_ACCESS_TOKEN` | Required | Secret token required by every API request |
 
-The backend binds to localhost by default, so it is not exposed to your local network.
+The backend binds to localhost by default, so it is not exposed to your local network. API routes reject requests without the configured `BENZ_ACCESS_TOKEN`; CORS is an additional browser policy, not a replacement for this token.
 
 ## Local data and privacy
 
