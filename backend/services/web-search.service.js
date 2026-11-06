@@ -256,7 +256,7 @@ async function search(query) {
     // Reserve an initial slot for each requested company when relevant results exist.
     for (const company of companies) {
         const candidate = ranked.find(result =>
-            matchesCompany(result, company) && !diverse.some(item => normalizeUrl(item.url) === normalizeUrl(result.url))
+            matchesCompany(result, company) && !domainCounts.has(domainOf(result.url))
         );
         if (candidate) addResult(candidate);
     }
