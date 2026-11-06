@@ -100,34 +100,15 @@ function matchesCompany(result, company) {
 
 function looksNonEnglish(result) {
     const url = String(result.url || "").toLowerCase();
-    const text = (String(result.title || "") + " " + String(result.snippet || "")).toLowerCase();
-    const spanishSignals = /\\b(desarrolla|desarrollado|una|para|seg[uú]n|m[eé]dicos|precisi[oó]n|investigaci[oó]n|anuncia|lanzamiento|nueva|nuevas|empresa|inteligencia artificial)\\b/;
-    return /\\/(?:es|es-es|es-mx)\\//.test(url) || spanishSignals.test(text);
-}
-
-function matchesDomain(domain, list) {") + "\\b", "i").test(text))
-    );
-}
-
-function matchesCompany(result, company) {
-    const text = String(result.title || "") + " " + String(result.snippet || "");
-    const domain = domainOf(result.url);
-    return company.aliases.some(alias => {
-        const escaped = alias.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\const reputableNewsDomains = [
-    "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "theverge.com",
-    "techcrunch.com", "technologyreview.com", "wired.com", "ft.com", "nytimes.com"
-];
-
-function matchesDomain(domain, list) {");
-        return new RegExp("\\b" + escaped + "\\b", "i").test(text);
-    }) || matchesDomain(domain, company.officialDomains);
-}
-
-function looksNonEnglish(result) {
-    const url = String(result.url || "").toLowerCase();
-    const text = (String(result.title || "") + " " + String(result.snippet || "")).toLowerCase();
-    const spanishSignals = /\\b(desarrolla|desarrollado|una|para|seg[uú]n|m[eé]dicos|precisi[oó]n|investigaci[oó]n|anuncia|lanzamiento|nueva|nuevas|empresa|inteligencia artificial)\\b/;
-    return /\\/(?:es|es-es|es-mx)\\//.test(url) || spanishSignals.test(text);
+    const normalizedText = " " + (String(result.title || "") + " " + String(result.snippet || ""))
+        .toLowerCase().replace(/[^a-z0-9áéíóúüñ]+/g, " ").trim() + " ";
+    const spanishSignals = [
+        "desarrolla", "desarrollado", "una", "para", "segun", "medicos",
+        "precision", "investigacion", "anuncia", "lanzamiento", "nueva",
+        "nuevas", "empresa", "inteligencia artificial"
+    ];
+    return /\/(?:es|es-es|es-mx)\//.test(url) ||
+        spanishSignals.some(word => normalizedText.includes(" " + word + " "));
 }
 
 function matchesDomain(domain, list) {
