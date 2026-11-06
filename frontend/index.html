@@ -215,8 +215,12 @@
         const memoryList = document.getElementById("memoryList");
         const memoryStatus = document.getElementById("memoryStatus");
         const conversationId = sessionStorage.getItem("conversationId") || crypto.randomUUID();
-
-        sessionStorage.setItem("conversationId", conversationId);
+        let accessToken = sessionStorage.getItem("benzAccessToken") || "";
+        if (!accessToken) {
+            accessToken = prompt("Enter your BENZ access token (set BENZ_ACCESS_TOKEN in the backend terminal):") || "";
+            if (accessToken) sessionStorage.setItem("benzAccessToken", accessToken);
+        }
+        const apiHeaders = (extra = {}) => ({ ...extra, "X-BENZ-ACCESS-TOKEN": accessToken });
 
         function addMessage(text, type) {
             const div = document.createElement("div");
@@ -283,7 +287,7 @@
 
         async function loadHistory() {
             try {
-                const response = await fetch("/api/history/" + encodeURIComponent(conversationId));
+                const response = await fetch("/api/history/" + encodeURIComponent(conversationId), { headers: apiHeaders() });
                 const data = await response.json();
                 messages.innerHTML = "";
 
@@ -309,7 +313,7 @@
             memoryList.innerHTML = "";
 
             try {
-                const response = await fetch("/api/memory");
+                const response = await fetch("/api/memory", { headers: apiHeaders() });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || "Could not load memories");
 
@@ -351,7 +355,7 @@
                         try {
                             const updateResponse = await fetch("/api/memory/" + encodeURIComponent(key), {
                                 method: "PUT",
-                                headers: { "Content-Type": "application/json" },
+                                headers: apiHeaders({ "Content-Type": "application/json" }),
                                 body: JSON.stringify({ value: valueInput.value })
                             });
                             const result = await updateResponse.json();
@@ -373,7 +377,8 @@
                         deleteButton.disabled = true;
                         try {
                             const deleteResponse = await fetch("/api/memory/" + encodeURIComponent(key), {
-                                method: "DELETE"
+                                method: "DELETE",
+                                headers: apiHeaders()
                             });
                             const result = await deleteResponse.json();
                             if (!deleteResponse.ok) throw new Error(result.error || "Delete failed");
@@ -415,7 +420,7 @@
             try {
                 const response = await fetch("/api/chat", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: apiHeaders({ "Content-Type": "application/json" }),
                     body: JSON.stringify({ message, conversationId })
                 });
                 const data = await response.json();
