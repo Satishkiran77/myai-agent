@@ -48,7 +48,7 @@ On Windows PowerShell, set a token for the current terminal with `$env:BENZ_ACCE
 
 ## Configuration
 
-Optional environment variables:
+Environment variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
