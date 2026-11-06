@@ -185,7 +185,7 @@
                 <h2>My Personal AI Agent</h2>
                 <p>Powered by Llama 3.2 | Permanent Memory Enabled</p>
             </div>
-            <button id="memoryToggle" type="button" class="secondary">My Memories</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="memoryToggle" type="button" class="secondary">My Memories</button><button id="changeToken" type="button" class="secondary">Change Token</button></div>
         </header>
 
         <section id="memoryPanel">
@@ -289,6 +289,7 @@
             try {
                 const response = await fetch("/api/history/" + encodeURIComponent(conversationId), { headers: apiHeaders() });
                 const data = await response.json();
+                if (!response.ok) throw new Error(data.error || "Could not load chat history");
                 messages.innerHTML = "";
 
                 if (data.messages && data.messages.length > 0) {
@@ -406,6 +407,15 @@
         });
 
         document.getElementById("refreshMemory").addEventListener("click", loadMemories);
+
+        document.getElementById("changeToken").addEventListener("click", async () => {
+            const nextToken = prompt("Enter your BENZ access token:");
+            if (!nextToken) return;
+            accessToken = nextToken;
+            sessionStorage.setItem("benzAccessToken", accessToken);
+            await loadHistory();
+            if (memoryPanel.classList.contains("open")) await loadMemories();
+        });
 
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
