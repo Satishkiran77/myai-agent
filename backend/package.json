@@ -5,7 +5,8 @@
   "description": "A local personal AI assistant powered by Ollama and Llama 3.2.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "keywords": [
     "ai-agent",
