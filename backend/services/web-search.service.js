@@ -158,6 +158,42 @@ function scoreResult(result, companies = []) {
     return score;
 }
 
+function selectDiverseResults(ranked, companies = [], maxResults = 12) {
+    const domainCounts = new Map();
+    const diverse = [];
+
+    const addResult = result => {
+        const domain = domainOf(result.url);
+        const count = domainCounts.get(domain) || 0;
+        if (!domain || count >= 2) return false;
+
+        domainCounts.set(domain, count + 1);
+        diverse.push({
+            ...result,
+            sourceType: matchesDomain(domain, officialDomains) ? "official" :
+                matchesDomain(domain, reputableNewsDomains) ? "established-news" : "other"
+        });
+        return true;
+    };
+
+    // Reserve an initial slot for each requested company when relevant results exist.
+    for (const company of companies) {
+        const candidate = ranked.find(result =>
+            (matchesCompany(result, company) || result.matchedCompany === company.name) &&
+            !domainCounts.has(domainOf(result.url))
+        );
+        if (candidate) addResult(candidate);
+    }
+
+    // Fill remaining slots with the strongest relevant, domain-diverse results.
+    for (const result of ranked) {
+        if (diverse.length >= maxResults) break;
+        addResult(result);
+    }
+
+    return diverse;
+}
+
 async function searchProvider(query, options = {}) {
     const params = new URLSearchParams({ q: query });
     // DuckDuckGo's past-month filter helps surface current articles before
@@ -265,32 +301,7 @@ async function search(query) {
             return matchesDomain(domain, officialDomains) || matchesDomain(domain, reputableNewsDomains);
         });
     }
-    const domainCounts = new Map();
-    const diverse = [];
-    const addResult = result => {
-        const domain = domainOf(result.url);
-        if (!domain || (domainCounts.get(domain) || 0) >= 2) return false;
-        domainCounts.set(domain, 1);
-        diverse.push({ ...result, sourceType: matchesDomain(domain, officialDomains) ? "official" :
-            matchesDomain(domain, reputableNewsDomains) ? "established-news" : "other" });
-        return true;
-    };
-
-    // Reserve an initial slot for each requested company when relevant results exist.
-    for (const company of companies) {
-        const candidate = ranked.find(result =>
-            (matchesCompany(result, company) || result.matchedCompany === company.name) &&
-            !domainCounts.has(domainOf(result.url))
-        );
-        if (candidate) addResult(candidate);
-    }
-
-    // Fill remaining slots with the strongest relevant, domain-diverse results.
-    for (const result of ranked) {
-        if (diverse.length >= 12) break;
-        addResult(result);
-    }
-    return diverse;
+    return selectDiverseResults(ranked, companies, 12);
 }
 
-module.exports = { search, buildSearchQuery };
+module.exports = { search, buildSearchQuery, selectDiverseResults };
