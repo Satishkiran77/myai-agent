@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const { createRateLimiter } = require("./middleware/rate-limit");
 const path = require("path");
 const settings = require("./config/settings");
 const healthRoutes = require("./routes/health.routes");
@@ -10,8 +11,22 @@ const { loadStores } = require("./memory");
 
 const app = express();
 app.disable("x-powered-by");
-app.use(cors());
+
+const allowedOrigins = new Set(settings.allowedOrigins);
+app.use(cors({
+    origin(origin, callback) {
+        if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+        return callback(null, false);
+    },
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type"],
+    maxAge: 600
+}));
+
 app.use(express.json({ limit: settings.jsonBodyLimit }));
+app.use("/api", createRateLimiter({ windowMs: 60_000, maxRequests: 120 }));
+app.use("/api/chat", createRateLimiter({ windowMs: 60_000, maxRequests: 12 }));
+app.use("/api/memory", createRateLimiter({ windowMs: 60_000, maxRequests: 30 }));
 app.use(express.static(path.join(__dirname, "../frontend")));
 app.use("/api", healthRoutes);
 app.use("/api", chatRoutes);
