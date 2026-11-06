@@ -8,6 +8,7 @@ const chatRoutes = require("./routes/chat.routes");
 const memoryRoutes = require("./routes/memory.routes");
 const historyRoutes = require("./routes/history.routes");
 const { loadStores } = require("./memory");
+const { requireAccessToken } = require("./middleware/access-token");
 
 const app = express();
 app.disable("x-powered-by");
@@ -19,12 +20,13 @@ app.use(cors({
         return callback(null, false);
     },
     methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type"],
+    allowedHeaders: ["Content-Type", "X-BENZ-ACCESS-TOKEN"],
     maxAge: 600
 }));
 
 app.use(express.json({ limit: settings.jsonBodyLimit }));
 app.use("/api", createRateLimiter({ windowMs: 60_000, maxRequests: 120 }));
+app.use("/api", requireAccessToken);
 app.use("/api/chat", createRateLimiter({ windowMs: 60_000, maxRequests: 12 }));
 app.use("/api/memory", createRateLimiter({ windowMs: 60_000, maxRequests: 30 }));
 app.use(express.static(path.join(__dirname, "../frontend")));
