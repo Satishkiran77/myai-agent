@@ -101,11 +101,18 @@ function matchesCompany(result, company) {
 function looksNonEnglish(result) {
     const url = String(result.url || "").toLowerCase();
     const normalizedText = " " + (String(result.title || "") + " " + String(result.snippet || ""))
-        .toLowerCase().replace(/[^a-z0-9áéíóúüñ]+/g, " ").trim() + " ";
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim() + " ";
+    // Use distinctive Spanish terms only; common words such as "una" or "para"
+    // can appear in English names and snippets and cause false positives.
     const spanishSignals = [
-        "desarrolla", "desarrollado", "una", "para", "segun", "medicos",
-        "precision", "investigacion", "anuncia", "lanzamiento", "nueva",
-        "nuevas", "empresa", "inteligencia artificial"
+        "desarrolla", "desarrollado", "medicos", "precision",
+        "investigacion", "anuncia", "lanzamiento", "nueva",
+        "nuevas", "empresa", "inteligencia artificial",
+        "segun", "herramienta", "aprendizaje automatico"
     ];
     return /\/(?:es|es-es|es-mx)\//.test(url) ||
         spanishSignals.some(word => normalizedText.includes(" " + word + " "));
