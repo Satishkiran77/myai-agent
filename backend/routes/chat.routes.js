@@ -58,8 +58,42 @@ router.post("/chat", async (req, res, next) => {
                     candidates,
                     isFreshSearch ? { maxAgeDays: 30 } : {}
                 );
-                if (eligible.length) {
-                    sources = eligible;
+                // A targeted query is only a lead. Keep its company attribution
+                // when the fetched article itself supports that company.
+                const supported = eligible.filter(item => {
+                    if (!item.matchedCompany) return true;
+                    const company = item.matchedCompany.toLowerCase();
+                    const domain = (() => {
+                        try { return new URL(item.url).hostname.toLowerCase(); }
+                        catch { return ""; }
+                    })();
+                    const normalizedText = " " + [item.title, item.snippet, item.articleContent]
+                        .join(" ").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() + " ";
+                    const aliases = company === "openai" ? ["openai", "chatgpt", "gpt"] :
+                        company === "google" ? ["google", "deepmind", "gemini", "genie"] :
+                        company === "microsoft" ? ["microsoft", "copilot", "azure ai"] : [company];
+                    const mentioned = aliases.some(alias => normalizedText.includes(" " + alias + " "));
+                    const officialDomain = company === "openai" ? domain === "openai.com" || domain.endsWith(".openai.com") :
+                        company === "google" ? ["blog.google", "deepmind.google", "googleblog.com"].some(host => domain === host || domain.endsWith("." + host)) :
+                        company === "microsoft" ? domain === "microsoft.com" || domain.endsWith(".microsoft.com") : false;
+                    return mentioned || officialDomain;
+                });
+                const uniqueEligible = new Map();
+                for (const item of supported) {
+                    let key = item.url;
+                    try {
+                        const parsed = new URL(item.url);
+                        parsed.hash = "";
+                        for (const name of [...parsed.searchParams.keys()]) {
+                            if (/^(utm_|fbclid$|gclid$|ref$)/i.test(name)) parsed.searchParams.delete(name);
+                        }
+                        key = parsed.href.replace(/\/$/, "");
+                    } catch {}
+                    if (!uniqueEligible.has(key)) uniqueEligible.set(key, item);
+                }
+                const deduplicated = [...uniqueEligible.values()];
+                if (deduplicated.length) {
+                    sources = deduplicated;
                     break;
                 }
                 if (!isFreshSearch || attempt === 1) sources = eligible;
