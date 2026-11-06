@@ -8,6 +8,22 @@ const webSearchService = require("../services/web-search.service");
 const articleFetchService = require("../services/article-fetch.service");
 const { understandIntent } = require("../agent/intent.engine");
 
+function isSameNewsEvent(firstTitle, secondTitle) {
+    const stopWords = new Set(["a", "an", "and", "the", "of", "for", "to", "in", "on", "with", "new", "latest", "announces", "announcing", "introduces", "introducing", "launches", "unveils"]);
+    const tokens = title => new Set(
+        String(title || "").toLowerCase()
+            .replace(/[^a-z0-9 ]/g, " ")
+            .split(/\s+/)
+            .filter(word => word.length > 2 && !stopWords.has(word))
+    );
+    const first = tokens(firstTitle);
+    const second = tokens(secondTitle);
+    if (!first.size || !second.size) return false;
+    const shared = [...first].filter(word => second.has(word)).length;
+    const union = new Set([...first, ...second]).size;
+    return shared >= 2 && shared / union >= 0.22;
+}
+
 router.post("/chat", async (req, res, next) => {
     try {
         const { message, conversationId } = req.body || {};
@@ -86,8 +102,11 @@ router.post("/chat", async (req, res, next) => {
                     // For latest-news requests, do not ask a generative model to
                     // invent or combine headlines. Build the response only from
                     // the dated source titles and search-provider descriptions.
+                    const newsItems = sources.filter((item, index) =>
+                        !sources.slice(0, index).some(previous => isSameNewsEvent(previous.title, item.title))
+                    );
                     reply = "Recent AI news coverage found (published within the last 30 days):\n\n" +
-                        sources.map((item, index) => {
+                        newsItems.map((item, index) => {
                             const date = item.publishedAt ? new Date(item.publishedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "Date unavailable";
                             const description = String(item.snippet || "").replace(/\\s+/g, " ").trim();
                             return (index + 1) + ". " + item.title + "\n" +
