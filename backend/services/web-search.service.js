@@ -143,7 +143,7 @@ function scoreResult(result, companies = []) {
     const domain = domainOf(result.url);
     let score = 0;
     for (const company of companies) {
-        if (matchesCompany(result, company)) score += 9;
+        if (matchesCompany(result, company) || result.matchedCompany === company.name) score += 9;
     }
     // Prefer English-language coverage when the user writes the query in English.
     if (looksNonEnglish(result)) score -= 8;
@@ -178,7 +178,8 @@ async function searchProvider(query, options = {}) {
         const result = {
             title: cleanText(match[2]),
             snippet: cleanText(match[3]),
-            url: decodeRedirect(decodeHtml(match[1]))
+            url: decodeRedirect(decodeHtml(match[1])),
+            matchedCompany: options.company || null
         };
         if (result.title && /^https?:\/\//i.test(result.url)) found.push(result);
     }
@@ -225,10 +226,15 @@ async function search(query) {
             ...officialSiteQueries,
             company.name + " AI news after:" + cutoffDate + " site:reuters.com OR site:apnews.com OR site:bbc.com OR site:theverge.com OR site:techcrunch.com OR site:wired.com",
             company.name + " latest AI product model research announcement " + currentMonth
-        ];
+        ].map(query => ({ query, company: company.name }));
     }) : [];
-    const allQueryVariants = [...new Set([...queryVariants, ...targetedVariants])];
-    const batches = await Promise.allSettled(allQueryVariants.map(query => searchProvider(query, { pastMonth: isFreshTopic })));
+    const allQueryVariants = [
+        ...queryVariants.map(query => ({ query, company: null })),
+        ...targetedVariants
+    ];
+    const batches = await Promise.allSettled(allQueryVariants.map(item =>
+        searchProvider(item.query, { pastMonth: isFreshTopic, company: item.company })
+    ));
     const found = batches.flatMap(item => item.status === "fulfilled" ? item.value : []);
     if (!found.length) {
         const error = new Error("Internet search is unavailable or returned no results. Check your connection and try again.");
@@ -241,7 +247,9 @@ async function search(query) {
         if (isGenericPage(result)) continue;
         // When companies were explicitly requested, discard articles that do not
         // identify any requested company in the headline, snippet, or official domain.
-        if (companies.length && !companies.some(company => matchesCompany(result, company))) continue;
+        if (companies.length && !companies.some(company =>
+            matchesCompany(result, company) || result.matchedCompany === company.name
+        )) continue;
         const normalized = normalizeUrl(result.url);
         const titleKey = result.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
         const key = normalized || titleKey;
